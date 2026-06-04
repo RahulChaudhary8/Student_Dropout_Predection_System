@@ -1,3 +1,4 @@
+
 import React, { useState,useEffect } from "react";
 import "./ManageMentors.css"; // styling alag rakho
 import AddMentorForm from "./AddMentorForm";
@@ -5,14 +6,8 @@ import AddMentorForm from "./AddMentorForm";
 export default function ManageMentors() {
   // Dummy data for mentors
   const [activeSection, setActiveSection] = useState("table");
-  const [mentors, setMentors] = useState([
-    
-    { id: 1, name: "Dr. Rakesh Gupta", specialization: "AI & ML", experience: "5 years" },
-    { id: 2, name: "Prof. Neha Singh", specialization: "Finance", experience: "8 years" },
-    { id: 3, name: "Mr. Arjun Verma", specialization: "Data Science", experience: "3 years" },
-    { id: 4, name: "Dr. Meera Iyer", specialization: "Cyber Security", experience: "6 years" },
-    { id: 5, name: "Prof. Karan Malhotra", specialization: "Cloud Computing", experience: "4 years" },
-  ]);
+  const [mentors, setMentors] = useState([]);
+
 
   // Add Mentor dummy handler
   const handleAddMentor = () => {
@@ -23,23 +18,80 @@ export default function ManageMentors() {
   //   setMentors(prev => [...prev, newMentor]); // table update
   //   setActiveSection("table"); // form submit ke baad table wapas
   // };
-  const handleMentorAdded = (newMentor) => {
-    const mentorWithId = {
-      id: mentors.length + 1, // auto ID
-      name: `${newMentor.firstName} ${newMentor.lastName}`,
-      specialization: newMentor.specialization,
-      experience: newMentor.experience + " years",
-    };
-
-    setMentors((prev) => [...prev, mentorWithId]);
-    setActiveSection("table"); // form band, table open
+const handleMentorAdded = (mentor) => {
+  const formatted = {
+    _id: mentor._id,
+    mentorId:mentor.mentorId,
+    name: `${mentor.firstName} ${mentor.lastName}`,
+    specialization: mentor.specialization,
+    experience: mentor.experience + " years",
+    active: mentor.active || true,
+     password: mentor.password
   };
+  setMentors((prev) => [...prev, formatted]);
+  setActiveSection("table");
+};
+
 
   // Delete mentor handler
-  const handleDeleteMentor = (id) => {
-    const updatedMentors = mentors.filter((mentor) => mentor.id !== id);
-    setMentors(updatedMentors);
+const handleDeleteMentor = async (id) => {
+  try {
+    const res = await fetch(`http://localhost:5000/api/mentors/${id}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      setMentors((prev) => prev.filter((m) => m._id !== id));
+    } else {
+      const data = await res.json();
+      alert(data.message || "Error deleting mentor");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+const handleToggleStatus = async (id, currentStatus) => {
+  try {
+    const res = await fetch(`http://localhost:5000/api/mentors/${id}/toggle`, {
+      method: "PATCH",
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setMentors((prev) =>
+        prev.map((m) => (m._id === id ? { ...m, active: !currentStatus } : m))
+      );
+    } else {
+      alert(data.message || "Error updating status");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
+useEffect(() => {
+  const fetchMentors = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/mentors");
+      const data = await res.json();
+      const formattedData = data.map(mentor => ({
+        _id: mentor._id,
+        mentorId: mentor.mentorId,
+        name: `${mentor.firstName} ${mentor.lastName}`,
+        specialization: mentor.specialization,
+        experience: mentor.experience + " years",
+        active: mentor.active,
+        password: mentor.password,
+        plainPassword: mentor.plainPassword
+         
+      }));
+
+      setMentors(formattedData); // data should contain _id, name, specialization, experience
+    } catch (err) {
+      console.error(err);
+    }
   };
+  fetchMentors();
+}, []);
+
   return (
     <div className="manage-mentors">
       <h2>Mentor Management</h2>
@@ -66,27 +118,35 @@ export default function ManageMentors() {
         <table className="mentors-table">
           <thead>
             <tr>
-              <th>ID</th>
+              <th>Mentor ID</th>
               <th>Name</th>
               <th>Specialization</th>
               <th>Experience</th>
+              <th>Password</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
             {mentors.map((mentor) => (
-              <tr key={mentor.id}>
-                <td>{mentor.id}</td>
+              <tr key={mentor._id}>
+                <td>{mentor.mentorId}</td>
                 <td>{mentor.name}</td>
                 <td>{mentor.specialization}</td>
                 <td>{mentor.experience}</td>
+                 <td>{mentor.plainPassword}</td>
                 <td>
                   <button>Edit</button>
                   <button
                     style={{ marginLeft: "8px" }}
-                    onClick={() => handleDeleteMentor(mentor.id)}
+                    onClick={() => handleDeleteMentor(mentor._id)}
                   >
                     Delete
+                  </button>
+                  <button
+                    style={{ marginLeft: "8px" }}
+                    onClick={() => handleToggleStatus(mentor._id, mentor.active)}
+                  >
+                    {mentor.active ? "Deactivate" : "Activate"}
                   </button>
                   
                 </td>

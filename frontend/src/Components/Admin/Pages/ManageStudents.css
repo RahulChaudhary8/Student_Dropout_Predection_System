@@ -1,6 +1,8 @@
 .manage-students {
   padding: 20px;
   font-family: Arial, sans-serif;
+    max-width: 1200px; /* max width page ke liye */
+  margin: 0 auto; 
 }
 
 .stcards {

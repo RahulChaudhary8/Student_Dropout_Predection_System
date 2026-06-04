@@ -10,43 +10,78 @@ export default function ManageStudents({ isActiveTab }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [studentsList, setStudentsList] = useState([]);
   const [searchTerm, setSearchTerm] = useState(""); // 👈 search term state
-  // useEffect(() => {
-  //   axios.get("http://localhost:5000/admin/getStudents")
-  //     .then(res => setStudentsList(res.data))
-  //     .catch(err => console.error(err));
-  // }, []);
+  useEffect(() => {
+  axios.get("http://localhost:5000/api/students")
+    .then(res => setStudents(res.data))
+    .catch(err => console.error(err));
+}, []);
+
   useEffect(() => {
     if (!isActiveTab) {
       setActiveSection("table"); // tab inactive → reset section
     }
   }, [isActiveTab]);
   // Dummy data
-  const [students, setStudents] = useState([
-    { id: 1, name: "Aman Sharma", course: "B.Tech (CSE)", year: "2nd", email: "aman.sharma@example.com" },
-    { id: 2, name: "Priya Verma", course: "MBA", year: "1st", email: "priya.verma@example.com" },
-    { id: 3, name: "Rohit Kumar", course: "B.Sc (Physics)", year: "3rd", email: "rohit.kumar@example.com" },
-    { id: 4, name: "Simran Kaur", course: "B.Com", year: "2nd", email: "simran.kaur@example.com" },
-    { id: 5, name: "Aditya Mehta", course: "M.Tech (AI)", year: "1st", email: "aditya.mehta@example.com" },
-  ]);
+ const [students, setStudents] = useState([]);
+
 
   // Add Student dummy handler
-  const handleAddStudent = () => {
+  const handleAddStudent = async() => {
+    setActiveSection("addStudent");
     
-    // setShowAddForm(!showAddForm);
-    setActiveSection("addStudent"); 
+    // const res = await axios.get("http://localhost:5000/api/students");
+    // setStudents(res.data);
+    // setActiveSection("table");
   };
-  const handleDeleteStudent = (id) => {
-  const updatedStudents = students.filter((student) => student.id !== id);
-  setStudents(updatedStudents);
+  const fetchStudents = async () => {
+  try {
+    const res = await axios.get("http://localhost:5000/api/students");
+    setStudents(res.data);
+  } catch (err) {
+    console.error(err);
+  }
 };
+
+useEffect(() => {
+  fetchStudents(); // page load par run
+}, []);
+
+const handleDeleteStudent = async (id) => {
+  if (!window.confirm("Are you sure you want to delete this student?")) return;
+
+  try {
+    await axios.delete(`http://localhost:5000/api/students/${id}`);
+    // state update
+    setStudents((prev) => prev.filter((student) => student._id !== id));
+    alert("✅ Student deleted successfully");
+  } catch (err) {
+    console.error(err);
+    alert("❌ Failed to delete student");
+  }
+};
+
 const handleStudentAdded = (newStudent) => {
-  setStudents(prevStudents => [...prevStudents, newStudent]); // table me add
-  setActiveSection("table"); // form submit ke baad table active
+  setStudents(prev => [...prev, newStudent]); 
+  setActiveSection("table"); // form close karke table dikha do
 };
+  // ✅ Button ke liye function
+  const assignOldMentors = async () => {
+    try {
+      const res = await axios.put("http://localhost:5000/api/students/assign-old-mentors");
+      console.log(res.data);
+      alert("✅ Old students updated with mentors!");
+      fetchStudents(); // refresh table
+    } catch (err) {
+      console.error(err);
+      alert("❌ Failed to assign mentors");
+    }
+  };
+
 const filteredStudents = students.filter((student) =>
-    student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.course.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  student.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  student.course?.toLowerCase().includes(searchTerm.toLowerCase())
+);
+
 
   return (
     <div className="manage-students">
@@ -81,6 +116,11 @@ const filteredStudents = students.filter((student) =>
           className="student-search"
         />
       </div>
+                  {/* ✅ Ye button add kiya */}
+            <button onClick={assignOldMentors} style={{ marginLeft: "10px" }}>
+              Assign Old Students Mentors
+            </button>
+          
         <table className="students-table">
           <thead>
             <tr>
@@ -89,22 +129,28 @@ const filteredStudents = students.filter((student) =>
               <th>Course</th>
               <th>Year</th>
               <th>email</th>
+              <th>Password</th> 
+              <th>Assigned Mentor</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
             {students.map((student) => (
-              <tr key={student.id}>
-                <td>{student.id}</td>
-                <td>{student.name}</td>
+              <tr key={student.studentId}>
+                <td>{student.studentId}</td>
+                <td>{student.studentName}</td>
                 <td>{student.course}</td>
                 <td>{student.year}</td>
                 <td>{student.email}</td>
+                <td>{student.plainPassword}</td>
+                <td>{student.assignedMentorId
+    ? `${student.assignedMentorId.firstName} ${student.assignedMentorId.lastName}`
+    : "Not Assigned"}</td>
                 <td>
                   <button>Edit</button>
                   <button
                     style={{ marginLeft: "8px" }}
-                    onClick={() => handleDeleteStudent(student.id)}
+                    onClick={() => handleDeleteStudent(student._id)}
                   >
                     Delete
                   </button>

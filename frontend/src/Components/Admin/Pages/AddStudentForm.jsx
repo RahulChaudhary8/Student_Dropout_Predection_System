@@ -5,7 +5,8 @@ import "./AddStudentForm.css"; // styling alag rakho
 const AddStudentForm = ({ onStudentAdded }) => {
   const [studentData, setStudentData] = useState({
     studentName: "",
-    studentId: "",
+    // studentId: "",
+    year: "",
     email: "",          // added
     phoneNumber: "",  
     course: "",
@@ -43,8 +44,11 @@ const AddStudentForm = ({ onStudentAdded }) => {
     curricularUnits2ndSemWithoutEvaluations: "",
     unemploymentRate: "",
     inflationRate: "",
-    GDP: ""
+    GDP: "",
+    totalFees: 0,
+     
   });
+const [generatedPassword, setGeneratedPassword] = useState("");
 
   const handleChange = (e) => {
     setStudentData({...studentData, [e.target.name]: e.target.value });
@@ -53,35 +57,24 @@ const AddStudentForm = ({ onStudentAdded }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-    //   const res = await axios.post("http://localhost:5000/admin/addStudent", studentData);
-    //   alert(res.data.message);
-      
-    //   if(onStudentAdded){
-    //     onStudentAdded({
-    //       id: res.data.newStudentId || Date.now(), // ya backend id
-    //       name: studentData.studentName,
-    //       course: studentData.course,
-    //       year: studentData.year || "N/A",
-    //       email: studentData.email || "N/A"
-    //     });
-    //     // if(onStudentAdded){
-    //     // onStudentAdded(newStudent);
-    //     // }
-    //   }
-    if(onStudentAdded){
-        const newStudent = {
-            id: Date.now(), // temporary unique id
-            name: studentData.studentName,
-            course: studentData.course,
-            year: studentData.year || "N/A",
-            email: studentData.email || "N/A"
-        };
-        onStudentAdded(newStudent);
-    }
+       const res = await axios.post("http://localhost:5000/api/students", studentData);
+       setGeneratedPassword(res.data.generatedPassword);
+
+      alert("✅ Student added successfully!");
+
+      if (onStudentAdded) {
+        // onStudentAdded(res.data); // backend se jo data aaye use table/list me bhej do
+onStudentAdded({ ...res.data.student, plainPassword: res.data.generatedPassword });
+      }
+
+
+
+   
       // Reset form
       setStudentData({
         studentName: "",
-        studentId: "",
+        // studentId: "",
+        year: "",
         email: "",          // added
     phoneNumber: "",  
         course: "",
@@ -119,7 +112,8 @@ const AddStudentForm = ({ onStudentAdded }) => {
         curricularUnits2ndSemWithoutEvaluations: "",
         unemploymentRate: "",
         inflationRate: "",
-        GDP: ""
+        GDP: "",
+        totalFees: 0,
       });
     } catch (err) {
       console.error(err);
@@ -134,7 +128,7 @@ const AddStudentForm = ({ onStudentAdded }) => {
         {Object.keys(studentData).map((key) => (
           <input
             key={key}
-            type="text"
+            type={key === "totalFees" ? "number" : "text"}
             name={key}
             placeholder={key.replace(/([A-Z])/g, ' $1')}
             value={studentData[key]}
@@ -142,6 +136,7 @@ const AddStudentForm = ({ onStudentAdded }) => {
             required
           />
         ))}
+        
         <button type="submit">Add Student</button>
         
       </form>

@@ -1,0 +1,101 @@
+/* Full page background */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to right, #2563eb, #4f46e5);
+  font-family: Arial, sans-serif;
+}
+
+/* Centered login box */
+.login-box {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+/* Title */
+.login-box h2 {
+  margin-bottom: 1.5rem;
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #333;
+}
+
+/* Labels */
+.login-box label {
+  display: block;
+  text-align: left;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+  color: #444;
+}
+
+/* Input fields */
+.login-box input {
+  width: 100%;
+  padding: 0.8rem;
+  margin-bottom: 1.2rem;
+  border: 1px solid #ddd;
+  border-radius: 0.6rem;
+  outline: none;
+  transition: border 0.2s ease;
+}
+
+.login-box input:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+}
+
+/* Submit button */
+.login-box button {
+  width: 100%;
+  background: linear-gradient(to right, #2563eb, #4f46e5);
+  color: white;
+  padding: 0.9rem;
+  border: none;
+  border-radius: 0.6rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.login-box button:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.login-box button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Error/Success message */
+.modal-message {
+  font-size: 0.9rem;
+  color: red;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+/* Footer links */
+.login-links {
+  margin-top: 1.2rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.login-links a {
+  color: #4f46e5;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-links a:hover {
+  text-decoration: underline;
+}

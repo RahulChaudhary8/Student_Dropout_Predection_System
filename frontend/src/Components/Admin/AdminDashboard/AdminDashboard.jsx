@@ -1,10 +1,12 @@
 
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import "./AdminDashboard.css";
 import ManageStudents from "../Pages/ManageStudents"; 
 import ManageMentors from "../Pages/ManageMentors";// import your component
 import FeeManagement from "../Fee/FeeManagement";
 import { FaUserShield } from "react-icons/fa";
+import axios from "axios";
+import AdminLeaveDashboard from "../Leave/AdminLeaveDashboard";
 
 // import Counselling from "../../Pages/Counselling/Counselling";
 
@@ -12,20 +14,29 @@ import { FaUserShield } from "react-icons/fa";
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [students, setStudents] = useState([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [totalMentors, setTotalMentors] = useState(0);
   const highRiskStudents = [
     { id: "STU101", name: "Rohan Verma", course: "B.Tech CSE", probability: 0.92 },
     { id: "STU115", name: "Aditi Sharma", course: "MBA", probability: 0.87 },
     { id: "STU130", name: "Arjun Singh", course: "B.Sc Physics", probability: 0.95 },
-    { id: "STU101", name: "Rohan Verma", course: "B.Tech CSE", probability: 0.92 },
-    { id: "STU115", name: "Aditi Sharma", course: "MBA", probability: 0.87 },
-    { id: "STU130", name: "Arjun Singh", course: "B.Sc Physics", probability: 0.95 },
-     { id: "STU101", name: "Rohan Verma", course: "B.Tech CSE", probability: 0.92 },
-    { id: "STU115", name: "Aditi Sharma", course: "MBA", probability: 0.87 },
-    { id: "STU130", name: "Arjun Singh", course: "B.Sc Physics", probability: 0.95 },
-    { id: "STU101", name: "Rohan Verma", course: "B.Tech CSE", probability: 0.92 },
-    { id: "STU115", name: "Aditi Sharma", course: "MBA", probability: 0.87 },
-    { id: "STU130", name: "Arjun Singh", course: "B.Sc Physics", probability: 0.95 },
   ];
+useEffect(() => {
+  // Fetch total students
+  axios.get("http://localhost:5000/api/students")
+
+    .then(res => {setTotalStudents(res.data)})
+
+    .catch(err => console.error(err));
+
+  // Fetch total mentors
+  axios.get("/api/mentors/count")
+    .then(res => setTotalMentors(res.data.totalMentors || res.data.length || 0))
+    .catch(err => console.error(err));
+}, []);
+
+
 
   return (
     <div className="admin-dashboard">
@@ -63,6 +74,12 @@ export default function AdminDashboard() {
             >
               Counselling
             </button>
+             <button
+              className={`nav-btn ${activeTab === "leave" ? "active" : ""}`}
+              onClick={() => setActiveTab("leave")}
+            >
+              Leave Management
+            </button>
           </nav>
         </aside>
 
@@ -78,8 +95,8 @@ export default function AdminDashboard() {
                 <FaUserShield className="banner-icon" />
               </div>
               <div className="acards">
-                <div className="acard">Total Students: 1200</div>
-                <div className="acard">Total Mentors: 45</div>
+                <div className="acard">Total Students: {students.length}</div>
+                <div className="acard">Total Mentors: 41</div>
                 <div className="acard">Pending Reports: 8</div>
               </div>
 
@@ -147,6 +164,7 @@ export default function AdminDashboard() {
           
           {activeTab === "mentors" && <ManageMentors />}
           {activeTab === "counselling" && <h2>Counselling Page Coming Soon...</h2>}
+          {activeTab === "leave" && <AdminLeaveDashboard />}
         </main>
       </div>
     </div>

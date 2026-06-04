@@ -1,3 +1,5 @@
+
+
 import React, { useState } from "react";
 import "./AddMentorForm.css";
 
@@ -21,37 +23,47 @@ const AddMentorForm = ({ onMentorAdded }) => {
     setMentorData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    console.log("Mentor Data Submitted:", mentorData);
-
-    // Table update ke liye parent ko data pass karo
-    if (onMentorAdded) {
-      onMentorAdded(mentorData);
-    }
-
-    // Reset after submit
-    setMentorData({
-      firstName: "",
-      lastName: "",
-      mentorId: "",
-      email: "",
-      phone: "",
-      specialization: "",
-      qualification: "",
-      counsellingType: "",
-      experience: "",
-      availability: "",
-      notes: "",
+  try {
+    const response = await fetch("http://localhost:5000/api/mentors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(mentorData),
     });
-  };
+    const result = await response.json();
+
+    if (response.ok) {
+      // Parent ko saved mentor pass karo
+      onMentorAdded(result.mentor);
+
+      // Reset form
+      setMentorData({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        specialization: "",
+        qualification: "",
+        counsellingType: "",
+        experience: "",
+        availability: "",
+        notes: "",
+      });
+    } else {
+      alert(result.message || "Error adding mentor");
+    }
+  } catch (error) {
+    console.error("Error:", error);
+  }
+};
+
 
   const handleReset = () => {
     setMentorData({
       firstName: "",
       lastName: "",
-      mentorId: "",
       email: "",
       phone: "",
       specialization: "",
@@ -91,19 +103,7 @@ const AddMentorForm = ({ onMentorAdded }) => {
           </div>
         </div>
 
-        {/* Row 2: Mentor ID */}
-        <div className="form-row">
-          <div className="form-group full-width">
-            <label>Mentor ID</label>
-            <input
-              type="text"
-              name="mentorId"
-              value={mentorData.mentorId}
-              onChange={handleChange}
-              required
-            />
-          </div>
-        </div>
+
 
         {/* Row 3: Email & Phone */}
         <div className="form-row">
@@ -165,9 +165,9 @@ const AddMentorForm = ({ onMentorAdded }) => {
             >
               <option value="">Select</option>
               <option value="Academic">Academic</option>
-              <option value="Career">Career</option>
-              <option value="Personal">Personal</option>
-              <option value="Psychological">Psychological</option>
+              <option value="Career-guidance">Career Guidance</option>
+              <option value="Financial">Financial</option>
+              <option value="Mental-health">Mental Health</option>
             </select>
           </div>
           <div className="form-group">
