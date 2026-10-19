@@ -19,6 +19,7 @@ import quizRoutes from "./routes/QuizRoutes.js";
 import notesRouter from "./routes/notes.js";
 import leaveRoutes from "./routes/leaveRoutes.js";
 
+import classRoutes from "./routes/classRoutes.js";
 
 
 dotenv.config();
@@ -31,7 +32,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/notify", notifyRoutes);
 app.use("/api/mentor-notify", mentorNotifyRoutes);
-app.use("/api/students", studentRoutes); 
+app.use("/api/students", studentRoutes);
 app.use('/api/mentors', mentorRoutes);
 app.use("/attendance", attendanceRoutes);
 app.use("/api/payments", paymentRoutes);
@@ -43,6 +44,7 @@ app.use("/api/mentor-profile", mentorProfileRoutes);
 app.use("/api/quiz", quizRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/notes", notesRouter);
+app.use("/api/classes", classRoutes);
 
 
 // MongoDB connection with FrontendDb

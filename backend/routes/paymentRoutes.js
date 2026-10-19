@@ -12,33 +12,49 @@ router.post("/", async (req, res) => {
     const student = await Student.findOne({ studentId });
     if (!student) return res.status(404).json({ error: "Student not found" });
 
-    // Update student's paidFees
     student.paidFees = (student.paidFees || 0) + Number(amount);
 
-    // Update tuition fee status
-  student.tuitionFeesUpToDate =
-  student.paidFees >= student.totalFees ? "Yes" : "No";
+    // Recompute status using the correct field name (totalCourseFees) and
+    // accounting for Overdue (paid < total AND due date has passed).
+    if (student.paidFees >= student.totalCourseFees) {
+      student.tuitionFeesUpToDate = "Yes";
+    } else if (student.dueDate && new Date() > new Date(student.dueDate)) {
+      student.tuitionFeesUpToDate = "Overdue";
+    } else {
+      student.tuitionFeesUpToDate = "No";
+    }
+
     await student.save();
 
-    // Save payment record
     const payment = new Payment({ studentId, amount, date, mode, remarks });
     await payment.save();
 
-    res.json({ msg: "Payment recorded successfully", payment });
+    res.json({ msg: "Payment recorded successfully", payment, student });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to record payment" });
   }
 });
 
-// GET - Fetch Payment History
+// GET - Fetch ALL payments (Admin view)
 router.get("/", async (req, res) => {
   try {
-    const payments = await Payment.find();
+    const payments = await Payment.find().sort({ date: -1 });
     res.json(payments);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to fetch payments" });
+  }
+});
+
+// GET - Fetch one student's payment history
+router.get("/student/:studentId", async (req, res) => {
+  try {
+    const payments = await Payment.find({ studentId: req.params.studentId }).sort({ date: -1 });
+    res.json(payments);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch payment history" });
   }
 });
 

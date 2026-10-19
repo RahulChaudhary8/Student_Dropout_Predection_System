@@ -1,123 +1,27 @@
-// import React, { useState } from "react";
-// import "./Student.css";
-// import StudentDetail from "../StudentDetails/StudentDetail";
-
-// const Student = ({ studentData, goBack, onMarkForCounselling }) => {
-//   const [selectedStudent, setSelectedStudent] = useState(null);
-
-//   const students = Array.isArray(studentData) ? studentData : [studentData];
-
-//   if (selectedStudent) {
-//     return (
-//       <StudentDetail
-//         student={selectedStudent}
-//         onBack={() => setSelectedStudent(null)}
-//         onMarkForCounselling={onMarkForCounselling} // ✅ pass kar diya
-//       />
-//     );
-//   }
-
-//   if (!students || students.length === 0) {
-//     return <div>No students found. Please upload Excel file.</div>;
-//   }
-
-//   const getRiskBadge = (risk) => {
-//     if (!risk) return <span className="badge badge-na">N/A</span>;
-
-//     const cls =
-//       risk === "High"
-//         ? "badge-high"
-//         : risk === "Moderate"
-//         ? "badge-moderate"
-//         : "badge-low";
-//     return <span className={`badge ${cls}`}>{risk}</span>;
-//   };
-
-//   return (
-//     <div className="student-details-page">
-//       <button className="back-btn" onClick={goBack}>
-//         ← Back to Dashboard
-//       </button>
-
-//       {students.map((student, index) => {
-//         const otherFields = Object.keys(student).filter(
-//           (key) =>
-//             ![
-//               "name",
-//               "Student ID",
-//               "course",
-//               "dropout_probability",
-//               "risk",
-//               "prediction",
-//             ].includes(key)
-//         );
-
-//         return (
-//           <div key={index} className="student-cards">
-//             {/* Basic Info Card */}
-//             <div className="card" onClick={() => setSelectedStudent(student)}>
-//               <h3>Student Detail</h3>
-//               <p>
-//                 <strong>Name:</strong> {student.name || "N/A"}
-//               </p>
-//               <p>
-//                 <strong>Student ID:</strong> {student["Student ID"] || "N/A"}
-//               </p>
-//               <p>
-//                 <strong>Course:</strong> {student.course || "N/A"}
-//               </p>
-//             </div>
-
-//             {/* Prediction Info Card */}
-//             {/* <div className="card" onClick={() => setSelectedStudent(student)}>
-//               <h3>Prediction Info</h3>
-//               <p>
-//                 <strong>Dropout Probability:</strong>{" "}
-//                 {student.dropout_probability !== undefined &&
-//                 student.dropout_probability !== null
-//                   ? student.dropout_probability.toFixed(2) + "%"
-//                   : "N/A"}
-//               </p>
-//               <p>
-//                 <strong>Risk Level:</strong> {getRiskBadge(student.risk)}
-//               </p>
-//               <p>
-//                 <strong>Prediction:</strong> {student.prediction || "N/A"}
-//               </p>
-//             </div> */}
-
-//             {/* Other Fields Card */}
-//             {/* <div
-//               className="card other-fields"
-//               onClick={() => setSelectedStudent(student)}
-//             >
-//               <h3>Other Details</h3>
-//               {otherFields.length === 0 ? (
-//                 <p>No additional information.</p>
-//               ) : (
-//                 otherFields.map((key) => (
-//                   <p key={key}>
-//                     <strong>{key}:</strong> {student[key] || "N/A"}
-//                   </p>
-//                 ))
-//               )}
-//             </div> */}
-//           </div>
-//         );
-//       })}
-//     </div>
-//   );
-// };
-
-// export default Student;
-
-
-
 import React, { useState } from "react";
-import "./Student.css";
 import StudentDetail from "../StudentDetails/StudentDetail";
+import {
+  Box,
+  Typography,
+  Card,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
+  TextField,
+  InputAdornment,
+  Button,
+  Chip,
+  Fade,
+  Grow,
+} from "@mui/material";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import InboxRoundedIcon from "@mui/icons-material/InboxRounded";
 
-const Student = ({ studentData, goBack,onMarkForCounselling }) => {
+const Student = ({ studentData, goBack, onMarkForCounselling }) => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -128,32 +32,33 @@ const Student = ({ studentData, goBack,onMarkForCounselling }) => {
       <StudentDetail
         student={selectedStudent}
         onBack={() => setSelectedStudent(null)}
-          onMarkForCounselling={() => {
-          // Use Dashboard's function
+        onMarkForCounselling={() => {
           onMarkForCounselling(selectedStudent);
-          // alert(`${selectedStudent.name} marked for counselling!`);
         }}
       />
     );
   }
 
   if (!students || students.length === 0) {
-    return <div>No students found. Please upload Excel file.</div>;
+    return (
+      <Fade in timeout={400}>
+        <Box className="flex flex-col items-center justify-center py-16">
+          <InboxRoundedIcon sx={{ fontSize: 48, color: "text.secondary", mb: 1.5 }} />
+          <Typography color="text.secondary">
+            No students found. Please upload Excel file.
+          </Typography>
+        </Box>
+      </Fade>
+    );
   }
 
-  const getRiskBadge = (risk) => {
-    if (!risk) return <span className="badge badge-na">N/A</span>;
+  function riskTone(risk) {
+    if (risk === "High") return "error";
+    if (risk === "Moderate") return "warning";
+    if (risk === "Low") return "success";
+    return "default";
+  }
 
-    const cls =
-      risk === "High"
-        ? "badge-high"
-        : risk === "Moderate"
-        ? "badge-moderate"
-        : "badge-low";
-    return <span className={`badge ${cls}`}>{risk}</span>;
-  };
-
-  // ✅ Search function
   const handleSearch = () => {
     const search = searchTerm.toLowerCase();
     const foundStudent = students.find(
@@ -168,64 +73,99 @@ const Student = ({ studentData, goBack,onMarkForCounselling }) => {
       alert("No matching student found!");
     }
   };
-  
 
-  // Sort students by Student ID alphabetically
   const sortedStudents = [...students].sort((a, b) => {
     const idA = (a["Student ID"] || "").toString().toLowerCase();
     const idB = (b["Student ID"] || "").toString().toLowerCase();
-    return idA.localeCompare(idB); // alphabetical order
+    return idA.localeCompare(idB);
   });
 
   return (
-    <div className="student-details-page">
-      <button className="back-btn" onClick={goBack}>
-        ← Back to Dashboard
-      </button>
+    <Fade in timeout={450}>
+      <Box>
+        <Button
+          startIcon={<ArrowBackRoundedIcon />}
+          onClick={goBack}
+          sx={{ mb: 2.5, fontWeight: 600 }}
+        >
+          Back to Dashboard
+        </Button>
 
-      {/* 🔎 Search Bar with Enter + Button */}
-      <div className="search-container">
-        <input
-          type="text"
-          placeholder="Search by Student Name or ID..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
-          onKeyDown={(e) => e.key === "Enter" && handleSearch()} // ⬅️ Enter press kare to search ho
-        />
-        <button className="search-btn" onClick={handleSearch}>
-          Search
-        </button>
-      </div>
+        {/* Search bar */}
+        <Box className="flex justify-end gap-2 mb-4">
+          <TextField
+            placeholder="Search by Student Name or ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            size="small"
+            sx={{ width: { xs: "100%", sm: 280 } }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchRoundedIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Button
+            variant="contained"
+            onClick={handleSearch}
+            className="transition-all duration-300"
+            sx={{ "&:hover": { transform: "translateY(-2px)", boxShadow: 3 } }}
+          >
+            Search
+          </Button>
+        </Box>
 
-      {/* Agar koi search ke bina table dekhna chahe to pura list show ho */}
-      <div className="student-table-container">
-        <table className="student-table">
-          <thead>
-            <tr>
-              <th>Student ID</th>
-              <th>Student Name</th>
-              <th>Course</th>
-              <th>Risk</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedStudents.map((student, index) => (
-              <tr key={index} onClick={() => setSelectedStudent(student)}>
-                <td>{student["Student ID"] || "N/A"}</td>
-                <td>{student.name || "N/A"}</td>
-                <td>{student.course || "N/A"}</td>
-                <td>{getRiskBadge(student.risk)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+        <Grow in timeout={500}>
+          <Card elevation={0} sx={{ border: "1px solid #e2e8f0" }}>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "primary.main" }}>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Student ID</TableCell>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Student Name</TableCell>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Course</TableCell>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Risk</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedStudents.map((student, index) => (
+                    <TableRow
+                      key={index}
+                      hover
+                      onClick={() => setSelectedStudent(student)}
+                      sx={{
+                        cursor: "pointer",
+                        "&:hover": { bgcolor: "rgba(37, 99, 235, 0.04)" },
+                      }}
+                    >
+                      <TableCell>{student.studentId || "N/A"}</TableCell>
+                      <TableCell>{student.fullName || "N/A"}</TableCell>
+                      <TableCell>{student.courseApplied || "N/A"}</TableCell>
+                      <TableCell>
+                        {student.risk ? (
+                          <Chip
+                            label={student.risk}
+                            color={riskTone(student.risk)}
+                            size="small"
+                            sx={{ fontWeight: 700 }}
+                          />
+                        ) : (
+                          <Chip label="N/A" size="small" variant="outlined" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Card>
+        </Grow>
+      </Box>
+    </Fade>
   );
 };
 
 export default Student;
-
-
-

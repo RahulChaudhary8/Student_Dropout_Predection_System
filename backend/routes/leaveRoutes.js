@@ -13,12 +13,12 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const student = await Student.findById(studentId);
+    const student = await Student.findOne({ studentId });
     if (!student) return res.status(404).json({ error: "Student not found" });
 
     const leave = new Leave({
       studentId,
-      studentName: student.studentName, // correct field
+      studentName: student.fullName, // correct field
       leaveType,
       startDate,
       endDate,
@@ -66,12 +66,19 @@ router.patch("/:id", async (req, res) => {
     leave.status = status;
     await leave.save();
 
-     req.app.get("io").emit("leaveStatusUpdate", {
-      studentId: leave.studentId,
-      studentName: leave.studentName,
-      status: leave.status,
-    });
-qq
+    // Guard: only emit if a socket.io instance is actually attached to the app.
+    // Without this, req.app.get("io") returns undefined (since Socket.io was
+    // never set up in server.js) and calling .emit() on undefined crashes
+    // the whole route with a 500.
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("leaveStatusUpdate", {
+        studentId: leave.studentId,
+        studentName: leave.studentName,
+        status: leave.status,
+      });
+    }
+
     res.json(leave);
   } catch (err) {
     res.status(500).json({ error: err.message });

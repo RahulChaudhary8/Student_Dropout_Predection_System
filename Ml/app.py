@@ -1,6 +1,7 @@
 # ml_service/app.py
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import joblib
@@ -13,14 +14,18 @@ import lime.lime_tabular
 # -------------------- FastAPI App --------------------
 app = FastAPI()
 
-# CORS settings (allow frontend dev access)
+# Add this right after creating the app, BEFORE any routes are defined.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",   # Vite dev server (mentor dashboard)
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+ 
 
 # -------------------- Load Model Pipeline --------------------
 PIPELINE_PATH = os.getenv("PIPELINE_PATH", "models\\ml_model_best.pkl")
@@ -65,17 +70,15 @@ def preprocess_input(df: pd.DataFrame):
         if col not in df.columns:
             df[col] = 0  # default for numeric/categorical
 
-    # Reorder columns
-    df = df[FEATURE_ORDER]
+    # Reorder columns — use .copy() to avoid SettingWithCopyWarning downstream
+    df = df[FEATURE_ORDER].copy()
 
     # Convert types
     for col in categorical_cols:
         df[col] = df[col].astype(str)
     for col in numeric_cols:
-        # df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-        df.loc[:, col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    
     return df
 
 def predict_probability_only(df: pd.DataFrame):

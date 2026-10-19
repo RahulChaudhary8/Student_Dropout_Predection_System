@@ -1,47 +1,3 @@
-// // backend/routes/attendance.js
-// import express from "express";
-// import Attendance from "../models/Attendance.js";
-
-// const router = express.Router();
-
-// // Save attendance
-// router.post("/", async (req, res) => {
-//   try {
-//     const entries = req.body;
-//     const savedEntries = await Attendance.insertMany(entries);
-//     res.status(201).json({ message: "Attendance saved", data: savedEntries });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ message: "Error saving attendance" });
-//   }
-// });
-
-// // Get all attendance for a student
-// router.get("/:student_id", async (req, res) => {
-//   try {
-//     const { student_id } = req.params;
-//     const studentAttendance = await Attendance.find({ student_id });
-//     res.json({ student_id, attendance: studentAttendance });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ message: "Error fetching attendance" });
-//   }
-// });
-
-// // Get all attendance for a specific date
-// router.get("/date/:date", async (req, res) => {
-//   try {
-//     const { date } = req.params;
-//     const dailyAttendance = await Attendance.find({ date });
-//     res.json(dailyAttendance);
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ message: "Error fetching attendance" });
-//   }
-// });
-
-// export default router;
-
 
 import express from "express";
 import Attendance from "../models/Attendance.js";
@@ -99,6 +55,18 @@ router.get("/aggregate/:student_id", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error aggregating attendance" });
+  }
+});
+
+// Get full attendance history for one student (used by the calendar view)
+router.get("/:student_id", async (req, res) => {
+  try {
+    const { student_id } = req.params;
+    const records = await Attendance.find({ student_id }).sort({ date: 1 });
+    res.json(records); // [{ student_id, name, course, status, date }, ...]
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching attendance" });
   }
 });
 

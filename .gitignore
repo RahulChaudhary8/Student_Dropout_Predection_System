@@ -69,6 +69,7 @@ Ml/*.csv
 # Backend: Node/Express or others
 backend/node_modules/
 backend/.env
+backend/uploads/
 
 # Frontend: React
 frontend/node_modules/

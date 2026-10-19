@@ -1,6 +1,3 @@
-
-
-
 import mongoose from "mongoose";
 
 const mentorSchema = new mongoose.Schema({
@@ -19,7 +16,14 @@ const mentorSchema = new mongoose.Schema({
   password: { type: String, required: true },     // hashed password for auth
   plainPassword: { type: String }, // plain password for admin reference
   active: { type: Boolean, default: true },
-},{ timestamps: true });
+  assignedClasses: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Class",
+      default: [],
+    },
+  ],
+}, { timestamps: true });
 
 const Mentor = mongoose.model("Mentor", mentorSchema);
 

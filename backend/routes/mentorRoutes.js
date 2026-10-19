@@ -6,16 +6,6 @@ import bcrypt from "bcryptjs";
 const router = express.Router();
 let mentorCounter = 1; // server restart hone par reset hoga, DB se sync karna better hai
 
-// const generateMentorId = async () => {
-//   // DB me last mentorId check karo
-//   const lastMentor = await Mentor.findOne().sort({ createdAt: -1 });
-//   if (lastMentor && lastMentor.mentorId) {
-//     const lastIdNumber = parseInt(lastMentor.mentorId.replace("MT", ""));
-//     mentorCounter = lastIdNumber + 1;
-//   }
-//   return "MT" + String(mentorCounter).padStart(3, "0");
-// };
-
 const generateMentorId = async () => {
   const lastMentor = await Mentor.findOne().sort({ createdAt: -1 });
   let newId = 1;
@@ -40,15 +30,15 @@ router.post("/", async (req, res) => {
     const customMentorId = await generateMentorId(); // ✅ generate MT001 etc
     const randomPassword = generatePassword();
     const generateUserId = () => "MNT" + Math.floor(Math.random() * 10000);
-     const hashedPassword = await bcrypt.hash(randomPassword, 10);
-    
+    const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
 
     const newMentor = new Mentor({
       ...req.body,
       mentorId: customMentorId, // ✅ save custom ID
       userId: generateUserId(),
       password: hashedPassword,       // save hashed password for login
-      plainPassword: randomPassword, 
+      plainPassword: randomPassword,
     });
 
     await newMentor.save();
@@ -65,7 +55,7 @@ router.post("/", async (req, res) => {
 // Get all mentors
 router.get("/", async (req, res) => {
   try {
-    const mentors = await Mentor.find();
+    const mentors = await Mentor.find().populate("assignedClasses");
     res.json(mentors);
   } catch (error) {
     res.status(500).json({ message: "Error fetching mentors", error });
@@ -108,6 +98,28 @@ router.patch("/:id/toggle", async (req, res) => {
     res.json({ message: "Mentor status updated", mentor });
   } catch (error) {
     res.status(500).json({ message: "Error updating status", error });
+  }
+});
+
+// Assign classes to a mentor (multiple classes supported)
+router.patch("/:id/assign-classes", async (req, res) => {
+  try {
+    const { classIds } = req.body; // array of Class _id strings
+    if (!Array.isArray(classIds)) {
+      return res.status(400).json({ message: "classIds must be an array" });
+    }
+    const mentor = await Mentor.findByIdAndUpdate(
+      req.params.id,
+      { assignedClasses: classIds },
+      { new: true }
+    ).populate("assignedClasses");
+
+    if (!mentor) {
+      return res.status(404).json({ message: "Mentor not found" });
+    }
+    res.json(mentor);
+  } catch (error) {
+    res.status(500).json({ message: "Error assigning classes", error: error.message });
   }
 });
 

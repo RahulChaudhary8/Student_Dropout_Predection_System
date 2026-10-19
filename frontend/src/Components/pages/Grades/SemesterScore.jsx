@@ -1,470 +1,41 @@
-// import React, { useState, useEffect } from "react";
-// import "./TestScores.css";
-
-// const TestScores = ({ students }) => {
-//   const [scoreData, setScoreData] = useState([]);
-
-//   useEffect(() => {
-//     setScoreData(
-//       students.map((s) => ({
-//         student_id: s.student_id,
-//         name: s.name,
-//         course: s.course,
-//         Sem1: s.Sem1 || "",
-//         Sem2: s.Sem2 || "",
-//         TestScore: s.TestScore || "",
-//       }))
-//     );
-//   }, [students]);
-
-//   const handleChange = (idx, field, value) => {
-//     // Allow only numbers and decimal
-//     if (value === "" || /^[0-9]*\.?[0-9]*$/.test(value)) {
-//       const updated = [...scoreData];
-//       updated[idx][field] = value;
-//       setScoreData(updated);
-//     }
-//   };
-
-//   const handleSave = () => {
-//     // Optionally: validate all fields filled
-//     const invalid = scoreData.some(
-//       (s) =>
-//         s.Sem1 === "" ||
-//         s.Sem2 === "" ||
-//         s.TestScore === "" ||
-//         isNaN(parseFloat(s.Sem1)) ||
-//         isNaN(parseFloat(s.Sem2)) ||
-//         isNaN(parseFloat(s.TestScore))
-//     );
-
-//     if (invalid) {
-//       alert("Please fill all scores with valid numbers before saving!");
-//       return;
-//     }
-
-//     // For now, just log the data
-//     console.log("Saved Test Scores:", scoreData);
-
-//     // TODO: send to backend API
-//     // axios.post("/api/save-test-scores", scoreData)
-//     //   .then(res => alert("Saved successfully!"))
-//     //   .catch(err => alert("Error saving data"));
-//     alert("Test scores saved successfully!");
-//   };
-
-//   return (
-//     <section className="testscore-page">
-//       <div className="card full-card">
-//         {/* <div className="card-header">
-//           <h2>Student Test Scores</h2>
-//         </div>
-
-//         <div style={{ marginBottom: "15px", textAlign: "right" }}>
-//             <button className="btn upload-btn" onClick={handleSave}>
-//                 Save All
-//             </button>
-//         </div> */}
-//         <div
-//           className="card-header"
-//           style={{
-//             display: "flex",
-//             justifyContent: "space-between",
-//             alignItems: "center",
-//           }}
-//         >
-//           <h2>Student Test Scores</h2>
-//           <button className="btn upload-btn" onClick={handleSave}>
-//             Save All
-//           </button>
-//         </div>
-
-//         <div className="testscore-body">
-//           <table className="risk-table mt-4">
-//             <thead>
-//               <tr>
-//                 <th>Student ID</th>
-//                 <th>Name</th>
-//                 <th>Course</th>
-//                 <th>Sem 1</th>
-//                 <th>Sem 2</th>
-//                 {/* <th>Test Score</th> */}
-//               </tr>
-//             </thead>
-//             <tbody>
-//               {!scoreData || scoreData.length === 0 ? (
-//                 <tr>
-//                   <td
-//                     colSpan="6"
-//                     style={{ textAlign: "center", padding: "20px" }}
-//                   >
-//                     No student records available.
-//                   </td>
-//                 </tr>
-//               ) : (
-//                 scoreData.map((s, idx) => (
-//                   <tr key={idx}>
-//                     <td>{s.student_id || "-"}</td>
-//                     <td>{s.name || "-"}</td>
-//                     <td>{s.course || "-"}</td>
-//                     <td>
-//                       <input
-//                         type="text"
-//                         value={s.Sem1}
-//                         onChange={(e) =>
-//                           handleChange(idx, "Sem1", e.target.value)
-//                         }
-//                         className="table-input"
-//                       />
-//                     </td>
-//                     <td>
-//                       <input
-//                         type="text"
-//                         value={s.Sem2}
-//                         onChange={(e) =>
-//                           handleChange(idx, "Sem2", e.target.value)
-//                         }
-//                         className="table-input"
-//                       />
-//                     </td>
-//                     {/* <td>
-//                       <input
-//                         type="text"
-//                         value={s.TestScore}
-//                         onChange={(e) => handleChange(idx, "TestScore", e.target.value)}
-//                         className="table-input"
-//                       />
-//                     </td> */}
-//                   </tr>
-//                 ))
-//               )}
-//             </tbody>
-//           </table>
-//         </div>
-//       </div>
-//     </section>
-//   );
-// };
-
-// export default TestScores;
-
-// import React, { useState, useEffect } from "react";
-// import "./TestScores.css";
-
-// const TestScores = ({ students }) => {
-//   const [scoreData, setScoreData] = useState([]);
-//   const [selectedYear, setSelectedYear] = useState(1);
-//   const [selectedSem, setSelectedSem] = useState("Sem1");
-
-//   useEffect(() => {
-//     setScoreData(
-//       students.map((s) => ({
-//         student_id: s.student_id,
-//         name: s.name,
-//         course: s.course,
-//         Sem1: s.Sem1 || "",
-//         Sem2: s.Sem2 || "",
-//         Sem3: s.Sem3 || "",
-//         Sem4: s.Sem4 || "",
-//         Sem5: s.Sem5 || "",
-//         Sem6: s.Sem6 || "",
-//         Sem7: s.Sem7 || "",
-//         Sem8: s.Sem8 || "",
-//       }))
-//     );
-//   }, [students]);
-
-//   // ✅ Map Year → Semesters
-//   const semesterOptions = {
-//     1: ["Sem1", "Sem2"],
-//     2: ["Sem3", "Sem4"],
-//     3: ["Sem5", "Sem6"],
-//     4: ["Sem7", "Sem8"],
-//   };
-
-//   // ✅ Handle change
-//   const handleChange = (idx, sem, value) => {
-//     if (value === "" || /^[0-9]*\.?[0-9]*$/.test(value)) {
-//       const updated = [...scoreData];
-//       updated[idx][sem] = value;
-//       setScoreData(updated);
-//     }
-//   };
-
-//   const handleYearChange = (year) => {
-//     setSelectedYear(year);
-//     setSelectedSem(semesterOptions[year][0]); // default pehle wala sem select hoga
-//   };
-
-//   const handleSave = () => {
-//     console.log("Saved:", scoreData);
-//     alert(`Marks saved for ${selectedYear} - ${selectedSem}`);
-//   };
-
-//   return (
-//     <section className="testscore-page">
-//       <div className="card full-card">
-//         <div
-//           className="card-header"
-//           style={{
-//             display: "flex",
-//             justifyContent: "space-between",
-//             alignItems: "center",
-//           }}
-//         >
-//           <h2>Student Test Scores</h2>
-//           <button className="btn upload-btn" onClick={handleSave}>
-//             Save All
-//           </button>
-//         </div>
-
-//         <div className="testscore-body">
-//           {/* ✅ Dropdowns for Year & Semester */}
-//           <div style={{ marginBottom: "15px", display: "flex", gap: "10px" }}>
-//             <label>Year:</label>
-//             <select
-//               value={selectedYear}
-//               onChange={(e) => handleYearChange(Number(e.target.value))}
-//             >
-//               <option value={1}>Year 1</option>
-//               <option value={2}>Year 2</option>
-//               <option value={3}>Year 3</option>
-//               <option value={4}>Year 4</option>
-//             </select>
-
-//             <label>Semester:</label>
-//             <select
-//               value={selectedSem}
-//               onChange={(e) => setSelectedSem(e.target.value)}
-//             >
-//               {semesterOptions[selectedYear].map((sem) => (
-//                 <option key={sem} value={sem}>
-//                   {sem}
-//                 </option>
-//               ))}
-//             </select>
-//           </div>
-
-//           <table className="risk-table mt-4">
-//             <thead>
-//               <tr>
-//                 <th>Student ID</th>
-//                 <th>Name</th>
-//                 <th>Course</th>
-//                 <th>{selectedSem}</th>
-//               </tr>
-//             </thead>
-//             <tbody>
-//               {scoreData.length === 0 ? (
-//                 <tr>
-//                   <td colSpan="4" style={{ textAlign: "center", padding: "20px" }}>
-//                     No student records available.
-//                   </td>
-//                 </tr>
-//               ) : (
-//                 scoreData.map((s, idx) => (
-//                   <tr key={idx}>
-//                     <td>{s.student_id || "-"}</td>
-//                     <td>{s.name || "-"}</td>
-//                     <td>{s.course || "-"}</td>
-//                     <td>
-//                       <input
-//                         type="text"
-//                         value={s[selectedSem]}
-//                         onChange={(e) => handleChange(idx, selectedSem, e.target.value)}
-//                         className="table-input"
-//                       />
-//                     </td>
-//                   </tr>
-//                 ))
-//               )}
-//             </tbody>
-//           </table>
-//         </div>
-//       </div>
-//     </section>
-//   );
-// };
-
-// export default TestScores;
-
-
-
-
-// import React, { useState, useEffect } from "react";
-// import "./SemesterScore.css";
-
-// const TestScores = ({ students, goBack }) => {
-//   const [scoreData, setScoreData] = useState([]);
-//   const [selectedYear, setSelectedYear] = useState(1);
-//   const [selectedSem, setSelectedSem] = useState("Sem1");
-
-//   useEffect(() => {
-//     setScoreData(
-//       students.map((s) => ({
-//         student_id: s.student_id,
-//         name: s.name,
-//         course: s.course,
-//         Sem1: s.Sem1 || "",
-//         Sem2: s.Sem2 || "",
-//         Sem3: s.Sem3 || "",
-//         Sem4: s.Sem4 || "",
-//         Sem5: s.Sem5 || "",
-//         Sem6: s.Sem6 || "",
-//         Sem7: s.Sem7 || "",
-//         Sem8: s.Sem8 || "",
-//       }))
-//     );
-//   }, [students]);
-
-//   // ✅ Year → Sem mapping
-//   const semesterOptions = {
-//     1: ["Sem1", "Sem2"],
-//     2: ["Sem3", "Sem4"],
-//     3: ["Sem5", "Sem6"],
-//     4: ["Sem7", "Sem8"],
-//   };
-
-//   const handleChange = (idx, sem, value) => {
-//     if (value === "" || /^[0-9]*\.?[0-9]*$/.test(value)) {
-//       const updated = [...scoreData];
-//       updated[idx][sem] = value;
-//       setScoreData(updated);
-//     }
-//   };
-
-//   const handleYearChange = (year) => {
-//     setSelectedYear(year);
-//     setSelectedSem(semesterOptions[year][0]); // default pehla semester
-//   };
-
-//   const handleSave = () => {
-//     console.log("Saved:", scoreData);
-//     alert(`Marks saved for ${selectedYear} - ${selectedSem}`);
-//   };
-
-//   return (
-//     <section className="testscore-page">
-//       <div className="card full-card">
-//         <div
-//           className="card-header"
-//           style={{
-//             display: "flex",
-//             justifyContent: "space-between",
-//             alignItems: "center",
-//           }}
-//         >
-//                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-//             {goBack && (
-//               <button className="btn" onClick={goBack}>
-//                 ⬅ Back
-//               </button>
-//             )}
-//             <h2>Student Semester Scores</h2>
-//           </div>
-          
-//           <button className="btn upload-btn" onClick={handleSave}>
-//             Save All
-//           </button>
-//         </div>
-
-//         <div className="testscore-body">
-//           <table className="risk-table mt-4">
-//             <thead>
-//               <tr>
-//                 <th>Student ID</th>
-//                 <th>Name</th>
-//                 <th>Course</th>
-
-//                 {/* ✅ Year dropdown in header */}
-//                 <th>
-//                   <label style={{ marginRight: "5px" }}>Year:</label>
-//                   <select
-//                     value={selectedYear}
-//                     onChange={(e) => handleYearChange(Number(e.target.value))}
-//                   >
-//                     <option value={1}>Year 1</option>
-//                     <option value={2}>Year 2</option>
-//                     <option value={3}>Year 3</option>
-//                     <option value={4}>Year 4</option>
-//                   </select>
-//                 </th>
-
-//                 {/* ✅ Semester dropdown in header */}
-//                 <th>
-//                   <label style={{ marginRight: "5px" }}>Semester:</label>
-//                   <select
-//                     value={selectedSem}
-//                     onChange={(e) => setSelectedSem(e.target.value)}
-//                   >
-//                     {semesterOptions[selectedYear].map((sem) => (
-//                       <option key={sem} value={sem}>
-//                         {sem}
-//                       </option>
-//                     ))}
-//                   </select>
-//                 </th>
-//               </tr>
-//             </thead>
-
-//             <tbody>
-//               {scoreData.length === 0 ? (
-//                 <tr>
-//                   <td colSpan="5" style={{ textAlign: "center", padding: "20px" }}>
-//                     No student records available.
-//                   </td>
-//                 </tr>
-//               ) : (
-//                 scoreData.map((s, idx) => (
-//                   <tr key={idx}>
-//                     <td>{s.student_id || "-"}</td>
-//                     <td>{s.name || "-"}</td>
-//                     <td>{s.course || "-"}</td>
-//                     <td colSpan="2">
-//                       <input
-//                         type="text"
-//                         value={s[selectedSem]}
-//                         onChange={(e) => handleChange(idx, selectedSem, e.target.value)}
-//                         className="table-input"
-//                         placeholder={`Enter marks for ${selectedSem}`}
-//                       />
-//                     </td>
-//                   </tr>
-//                 ))
-//               )}
-//             </tbody>
-//           </table>
-//         </div>
-//       </div>
-//     </section>
-//   );
-// };
-
-// export default TestScores;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useEffect } from "react";
-import "./SemesterScore.css"; // CSS file remains same, you can update class names inside it too
+import {
+  Box,
+  Paper,
+  Typography,
+  Button,
+  TextField,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Fade,
+  LinearProgress,
+} from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import SaveIcon from "@mui/icons-material/Save";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import SchoolIcon from "@mui/icons-material/School";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 
-const SemesterScore = ({ students, goBack }) => {
+const semesterOptions = {
+  1: ["Sem1", "Sem2"],
+  2: ["Sem3", "Sem4"],
+  3: ["Sem5", "Sem6"],
+  4: ["Sem7", "Sem8"],
+};
+
+const SemesterScore = ({ students = [], goBack }) => {
   const [scoreData, setScoreData] = useState([]);
   const [selectedYear, setSelectedYear] = useState(1);
   const [selectedSem, setSelectedSem] = useState("Sem1");
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setScoreData(
@@ -472,24 +43,13 @@ const SemesterScore = ({ students, goBack }) => {
         student_id: s.student_id,
         name: s.name,
         course: s.course,
-        Sem1: s.Sem1 || "",
-        Sem2: s.Sem2 || "",
-        Sem3: s.Sem3 || "",
-        Sem4: s.Sem4 || "",
-        Sem5: s.Sem5 || "",
-        Sem6: s.Sem6 || "",
-        Sem7: s.Sem7 || "",
-        Sem8: s.Sem8 || "",
+        Sem1: s.Sem1 || "", Sem2: s.Sem2 || "",
+        Sem3: s.Sem3 || "", Sem4: s.Sem4 || "",
+        Sem5: s.Sem5 || "", Sem6: s.Sem6 || "",
+        Sem7: s.Sem7 || "", Sem8: s.Sem8 || "",
       }))
     );
   }, [students]);
-
-  const semesterOptions = {
-    1: ["Sem1", "Sem2"],
-    2: ["Sem3", "Sem4"],
-    3: ["Sem5", "Sem6"],
-    4: ["Sem7", "Sem8"],
-  };
 
   const handleChange = (idx, sem, value) => {
     if (value === "" || /^[0-9]*\.?[0-9]*$/.test(value)) {
@@ -499,265 +59,294 @@ const SemesterScore = ({ students, goBack }) => {
     }
   };
 
-  const handleYearChange = (year) => {
-    setSelectedYear(year);
-    setSelectedSem(semesterOptions[year][0]);
+  const handleYearChange = (_, val) => {
+    if (!val) return;
+    setSelectedYear(val);
+    setSelectedSem(semesterOptions[val][0]);
   };
 
   const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
     console.log("Saved:", scoreData);
-    alert(`Marks saved for Year ${selectedYear} - ${selectedSem}`);
+  };
+
+  // Progress
+  const filledCount = scoreData.filter((s) => s[selectedSem] !== "").length;
+  const progress = scoreData.length > 0 ? (filledCount / scoreData.length) * 100 : 0;
+
+  const getScoreChip = (marks) => {
+    const v = parseFloat(marks);
+    if (isNaN(v)) return null;
+    if (v >= 75) return { label: "Good", color: "#dcfce7", text: "#15803d" };
+    if (v >= 50) return { label: "Average", color: "#fef9c3", text: "#a16207" };
+    return { label: "Low", color: "#fee2e2", text: "#b91c1c" };
   };
 
   return (
-    <section className="semester-score-page">
-      <div className="semester-score-card">
-        {/* Header */}
-        <div className="semester-score-header">
-          <div className="semester-score-title">
-            {goBack && (
-              <button className="btn back-btn" onClick={goBack}>
-                ⬅ Back
-              </button>
-            )}
-            <h2>Student Semester Scores</h2>
-          </div>
-          <button className="btn save-btn" onClick={handleSave}>
-            Save All
-          </button>
-        </div>
+    <Box className="min-h-screen bg-slate-50 p-4 md:p-6">
+      <Paper
+        elevation={0}
+        sx={{ borderRadius: 3, border: "1px solid #e2e8f0", overflow: "hidden", backgroundColor: "#fff" }}
+      >
+        {/* ── Header ── */}
+        <Box
+          className="flex items-center justify-between px-5 py-4"
+          sx={{ borderBottom: "1px solid #e2e8f0", backgroundColor: "#f8fafc" }}
+        >
+          {goBack && (
+            <Tooltip title="Go back" arrow TransitionComponent={Fade}>
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={goBack}
+                variant="outlined"
+                size="small"
+                sx={{
+                  borderColor: "#cbd5e1", color: "#475569", borderRadius: 2,
+                  textTransform: "none", fontWeight: 600,
+                  "&:hover": { borderColor: "#94a3b8", backgroundColor: "#f1f5f9" },
+                }}
+              >
+                Back
+              </Button>
+            </Tooltip>
+          )}
 
-        <div className="semester-score-body">
-          <table className="semester-score-table">
-            <thead>
-              <tr>
-                <th>Student ID</th>
-                <th>Name</th>
-                <th>Course</th>
-                <th>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => handleYearChange(Number(e.target.value))}
-                  >
-                    <option value={1}>Year 1</option>
-                    <option value={2}>Year 2</option>
-                    <option value={3}>Year 3</option>
-                    <option value={4}>Year 4</option>
-                  </select>
-                </th>
-                <th>
-                  <select
-                    value={selectedSem}
-                    onChange={(e) => setSelectedSem(e.target.value)}
-                  >
-                    {semesterOptions[selectedYear].map((sem) => (
-                      <option key={sem} value={sem}>
-                        {sem}
-                      </option>
+          <Box className="flex items-center gap-2">
+            <SchoolIcon sx={{ color: "#6366f1", fontSize: 22 }} />
+            <Typography variant="h6" sx={{ fontWeight: 700, color: "#0f172a" }}>
+              Student Semester Scores
+            </Typography>
+          </Box>
+
+          <Button
+            startIcon={saved ? <CheckCircleIcon /> : <SaveIcon />}
+            onClick={handleSave}
+            variant="contained"
+            size="small"
+            sx={{
+              borderRadius: 2, textTransform: "none", fontWeight: 600, minWidth: 100,
+              backgroundColor: saved ? "#22c55e" : "#6366f1",
+              "&:hover": { backgroundColor: saved ? "#16a34a" : "#4f46e5" },
+              transition: "background-color 0.3s ease",
+            }}
+          >
+            {saved ? "Saved!" : "Save All"}
+          </Button>
+        </Box>
+
+        <Box className="p-5 flex flex-col gap-5">
+          {/* ── Year + Semester Selector ── */}
+          <Paper
+            elevation={0}
+            sx={{ p: 2.5, borderRadius: 2, border: "1px solid #e2e8f0", backgroundColor: "#fafafa" }}
+          >
+            <Box className="flex flex-wrap items-center gap-4">
+              {/* Year Toggle */}
+              <Box className="flex flex-col gap-1">
+                <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 600, letterSpacing: 0.4 }}>
+                  YEAR
+                </Typography>
+                <ToggleButtonGroup
+                  value={selectedYear}
+                  exclusive
+                  onChange={handleYearChange}
+                  size="small"
+                  sx={{
+                    "& .MuiToggleButton-root": {
+                      borderRadius: "8px !important",
+                      border: "1px solid #e2e8f0 !important",
+                      px: 2, py: 0.6,
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      color: "#64748b",
+                      textTransform: "none",
+                      mx: 0.3,
+                      "&.Mui-selected": {
+                        backgroundColor: "#6366f1",
+                        color: "#fff",
+                        borderColor: "#6366f1 !important",
+                        "&:hover": { backgroundColor: "#4f46e5" },
+                      },
+                    },
+                  }}
+                >
+                  {[1, 2, 3, 4].map((y) => (
+                    <ToggleButton key={y} value={y}>
+                      Year {y}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </Box>
+
+              {/* Divider */}
+              <Box sx={{ height: 36, width: "1px", backgroundColor: "#e2e8f0" }} />
+
+              {/* Semester Toggle */}
+              <Box className="flex flex-col gap-1">
+                <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 600, letterSpacing: 0.4 }}>
+                  SEMESTER
+                </Typography>
+                <ToggleButtonGroup
+                  value={selectedSem}
+                  exclusive
+                  onChange={(_, val) => val && setSelectedSem(val)}
+                  size="small"
+                  sx={{
+                    "& .MuiToggleButton-root": {
+                      borderRadius: "8px !important",
+                      border: "1px solid #e2e8f0 !important",
+                      px: 2.5, py: 0.6,
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      color: "#64748b",
+                      textTransform: "none",
+                      mx: 0.3,
+                      "&.Mui-selected": {
+                        backgroundColor: "#e0e7ff",
+                        color: "#4338ca",
+                        borderColor: "#a5b4fc !important",
+                      },
+                    },
+                  }}
+                >
+                  {semesterOptions[selectedYear].map((sem) => (
+                    <ToggleButton key={sem} value={sem}>
+                      {sem}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </Box>
+
+              {/* Active badge */}
+              <Box className="flex items-center gap-1 ml-auto">
+                <CalendarTodayIcon sx={{ fontSize: 14, color: "#94a3b8" }} />
+                <Chip
+                  label={`Year ${selectedYear} · ${selectedSem}`}
+                  size="small"
+                  sx={{
+                    backgroundColor: "#ede9fe", color: "#6d28d9",
+                    fontWeight: 700, fontSize: "0.75rem", height: 24,
+                  }}
+                />
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* ── Progress + Table ── */}
+          <Box>
+            <Box className="flex items-center justify-between mb-1">
+              <Typography variant="subtitle2" sx={{ color: "#334155", fontWeight: 700 }}>
+                Enter Marks — {selectedSem}
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#64748b" }}>
+                {filledCount} / {scoreData.length} filled
+              </Typography>
+            </Box>
+
+            <LinearProgress
+              variant="determinate"
+              value={progress}
+              sx={{
+                height: 5, borderRadius: 3, mb: 2, backgroundColor: "#e2e8f0",
+                "& .MuiLinearProgress-bar": {
+                  backgroundColor: progress === 100 ? "#22c55e" : "#6366f1",
+                  borderRadius: 3, transition: "background-color 0.4s ease",
+                },
+              }}
+            />
+
+            <TableContainer
+              component={Paper}
+              elevation={0}
+              sx={{ border: "1px solid #e2e8f0", borderRadius: 2, overflow: "hidden" }}
+            >
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: "#f1f5f9" }}>
+                    {["Student ID", "Name", "Course", `Marks (${selectedSem})`].map((h) => (
+                      <TableCell
+                        key={h}
+                        sx={{ fontWeight: 700, color: "#334155", fontSize: "0.8rem", py: 1.5, borderBottom: "1.5px solid #e2e8f0" }}
+                      >
+                        {h}
+                      </TableCell>
                     ))}
-                  </select>
-                </th>
-                <th>Marks</th>
-              </tr>
-            </thead>
+                  </TableRow>
+                </TableHead>
 
-            <tbody>
-              {scoreData.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="no-records">
-                    No student records available.
-                  </td>
-                </tr>
-              ) : (
-                scoreData.map((s, idx) => (
-                  <tr key={idx}>
-                    <td>{s.student_id || "-"}</td>
-                    <td>{s.name || "-"}</td>
-                    <td>{s.course || "-"}</td>
-                    <td>{selectedYear}</td>
-                    <td>{selectedSem}</td>
-                    <td>
-                      <input
-                        type="text"
-                        value={s[selectedSem]}
-                        onChange={(e) => handleChange(idx, selectedSem, e.target.value)}
-                        className="semester-score-input"
-                        placeholder={`Enter marks for ${selectedSem}`}
-                      />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+                <TableBody>
+                  {scoreData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} sx={{ textAlign: "center", py: 4, color: "#94a3b8", fontStyle: "italic" }}>
+                        No student records available.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    scoreData.map((s, idx) => {
+                      const chip = getScoreChip(s[selectedSem]);
+                      return (
+                        <TableRow
+                          key={idx}
+                          sx={{
+                            backgroundColor: idx % 2 === 0 ? "#fff" : "#fafafa",
+                            "&:hover": { backgroundColor: "#f1f5f9" },
+                            transition: "background-color 0.15s ease",
+                          }}
+                        >
+                          <TableCell sx={{ fontSize: "0.82rem", color: "#64748b", py: 1 }}>
+                            {s.student_id || "-"}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b", py: 1 }}>
+                            {s.name || "-"}
+                          </TableCell>
+                          <TableCell sx={{ py: 1 }}>
+                            <Chip
+                              label={s.course || "-"}
+                              size="small"
+                              sx={{ backgroundColor: "#ede9fe", color: "#6d28d9", fontWeight: 600, fontSize: "0.72rem", height: 22 }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ py: 1 }}>
+                            <Box className="flex items-center gap-2">
+                              <TextField
+                                type="text"
+                                value={s[selectedSem]}
+                                onChange={(e) => handleChange(idx, selectedSem, e.target.value)}
+                                placeholder="—"
+                                size="small"
+                                inputProps={{ inputMode: "decimal" }}
+                                sx={{
+                                  width: 110,
+                                  "& .MuiOutlinedInput-root": {
+                                    borderRadius: 2, fontSize: "0.85rem",
+                                    "& fieldset": { borderColor: "#e2e8f0" },
+                                    "&:hover fieldset": { borderColor: "#6366f1" },
+                                    "&.Mui-focused fieldset": { borderColor: "#6366f1" },
+                                  },
+                                }}
+                              />
+                              {chip && (
+                                <Chip
+                                  label={chip.label}
+                                  size="small"
+                                  sx={{ backgroundColor: chip.color, color: chip.text, fontWeight: 700, fontSize: "0.7rem", height: 22 }}
+                                />
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </Box>
+      </Paper>
+    </Box>
   );
 };
 
 export default SemesterScore;
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from "react";
-// import "./SemesterScore.css";
-
-// const TestScores = ({ students, goBack }) => {
-//   const [scoreData, setScoreData] = useState([]);
-//   const [selectedYear, setSelectedYear] = useState(1);
-//   const [selectedSem, setSelectedSem] = useState("Sem1");
-
-//   useEffect(() => {
-//     setScoreData(
-//       students.map((s) => ({
-//         student_id: s.student_id,
-//         name: s.name,
-//         course: s.course,
-//         Sem1: s.Sem1 || "",
-//         Sem2: s.Sem2 || "",
-//         Sem3: s.Sem3 || "",
-//         Sem4: s.Sem4 || "",
-//         Sem5: s.Sem5 || "",
-//         Sem6: s.Sem6 || "",
-//         Sem7: s.Sem7 || "",
-//         Sem8: s.Sem8 || "",
-//       }))
-//     );
-//   }, [students]);
-
-//   // Year → Sem mapping
-//   const semesterOptions = {
-//     1: ["Sem1", "Sem2"],
-//     2: ["Sem3", "Sem4"],
-//     3: ["Sem5", "Sem6"],
-//     4: ["Sem7", "Sem8"],
-//   };
-
-//   const handleChange = (idx, sem, value) => {
-//     if (value === "" || /^[0-9]*\.?[0-9]*$/.test(value)) {
-//       const updated = [...scoreData];
-//       updated[idx][sem] = value;
-//       setScoreData(updated);
-//     }
-//   };
-
-//   const handleYearChange = (year) => {
-//     setSelectedYear(year);
-//     setSelectedSem(semesterOptions[year][0]);
-//   };
-
-//   const handleSave = () => {
-//     console.log("Saved:", scoreData);
-//     alert(`Marks saved for Year ${selectedYear} - ${selectedSem}`);
-//   };
-
-//   return (
-//     <section className="testscore-page">
-//       <div className="card full-card">
-//         {/* Header */}
-//         <div
-//           className="card-header"
-//           style={{
-//             display: "flex",
-//             justifyContent: "space-between",
-//             alignItems: "center",
-//           }}
-//         >
-//           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-//             {goBack && (
-//               <button className="btn" onClick={goBack}>
-//                 ⬅ Back
-//               </button>
-//             )}
-//             <h2>Student Semester Scores</h2>
-//           </div>
-
-//           <button className="btn upload-btn" onClick={handleSave}>
-//             Save All
-//           </button>
-//         </div>
-
-//         <div className="testscore-body">
-//           {/* Table */}
-//           <table className="risk-table mt-4">
-//             <thead>
-//               <tr>
-//                 <th>Student ID</th>
-//                 <th>Name</th>
-//                 <th>Course</th>
-
-//                 {/* ✅ Year dropdown in header */}
-//                 <th>
-//                   <select
-//                     value={selectedYear}
-//                     onChange={(e) => handleYearChange(Number(e.target.value))}
-//                   >
-//                     <option value={1}>Year 1</option>
-//                     <option value={2}>Year 2</option>
-//                     <option value={3}>Year 3</option>
-//                     <option value={4}>Year 4</option>
-//                   </select>
-//                 </th>
-
-//                 {/* ✅ Semester dropdown in header */}
-//                 <th>
-//                   <select
-//                     value={selectedSem}
-//                     onChange={(e) => setSelectedSem(e.target.value)}
-//                   >
-//                     {semesterOptions[selectedYear].map((sem) => (
-//                       <option key={sem} value={sem}>
-//                         {sem}
-//                       </option>
-//                     ))}
-//                   </select>
-//                 </th>
-
-//                 <th>Marks</th>
-//               </tr>
-//             </thead>
-
-//             <tbody>
-//               {scoreData.length === 0 ? (
-//                 <tr>
-//                   <td colSpan="6" style={{ textAlign: "center", padding: "20px" }}>
-//                     No student records available.
-//                   </td>
-//                 </tr>
-//               ) : (
-//                 scoreData.map((s, idx) => (
-//                   <tr key={idx}>
-//                     <td>{s.student_id || "-"}</td>
-//                     <td>{s.name || "-"}</td>
-//                     <td>{s.course || "-"}</td>
-//                     <td>{selectedYear}</td>
-//                     <td>{selectedSem}</td>
-//                     <td>
-//                       <input
-//                         type="text"
-//                         value={s[selectedSem]}
-//                         onChange={(e) => handleChange(idx, selectedSem, e.target.value)}
-//                         className="table-input"
-//                         placeholder={`Enter marks for ${selectedSem}`}
-//                       />
-//                     </td>
-//                   </tr>
-//                 ))
-//               )}
-//             </tbody>
-//           </table>
-//         </div>
-//       </div>
-//     </section>
-//   );
-// };
-
-// export default TestScores;
-
-

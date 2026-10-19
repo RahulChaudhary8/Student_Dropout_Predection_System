@@ -1,19 +1,79 @@
-
-import React, { useState ,useEffect} from "react";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import "./Counselling.css";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Grid,
+  Avatar,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
+  TextField,
+  MenuItem,
+  Chip,
+  Button,
+  IconButton,
+  Tooltip,
+  Fade,
+  Grow,
+} from "@mui/material";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
+import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsActiveRounded";
+import VideoCallRoundedIcon from "@mui/icons-material/VideoCallRounded";
+import InboxRoundedIcon from "@mui/icons-material/InboxRounded";
+import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
+import SelfImprovementRoundedIcon from "@mui/icons-material/SelfImprovementRounded";
+import WorkRoundedIcon from "@mui/icons-material/WorkRounded";
+import SupportAgentRoundedIcon from "@mui/icons-material/SupportAgentRounded";
 
-const Counselling = ({ students,goBack}) => {
+const suggestions = [
+  {
+    icon: <PaymentsRoundedIcon />,
+    title: "Financial Strain",
+    desc: "Offer scholarships, fee waivers, and part-time opportunities.",
+  },
+  {
+    icon: <MenuBookRoundedIcon />,
+    title: "Academic Struggles",
+    desc: "Provide career counseling, tutoring, and mentorship programs.",
+  },
+  {
+    icon: <SelfImprovementRoundedIcon />,
+    title: "Mental Health",
+    desc: "Encourage peer support groups, therapy sessions, and wellness activities.",
+  },
+  {
+    icon: <WorkRoundedIcon />,
+    title: "Career Guidance",
+    desc: "Encourage peer support groups, therapy sessions, and wellness activities.",
+  },
+  {
+    icon: <SupportAgentRoundedIcon />,
+    title: "Personal Issue Counselling",
+    desc: "Encourage peer support groups, therapy sessions, and wellness activities.",
+  },
+];
 
+function statusTone(status) {
+  if (status === "Completed") return "success";
+  if (status === "Ongoing") return "warning";
+  return "default";
+}
+
+const Counselling = ({ students, goBack }) => {
   const [mentorsByType, setMentorsByType] = useState({});
 
   useEffect(() => {
     axios
       .get("http://127.0.0.1:5000/api/mentors")
       .then((res) => {
-        // Backend se mentors le kar group by counsellingType
         const grouped = res.data.reduce((acc, mentor) => {
           if (!acc[mentor.counsellingType]) {
             acc[mentor.counsellingType] = [];
@@ -26,7 +86,6 @@ const Counselling = ({ students,goBack}) => {
       .catch((err) => console.error(err));
   }, []);
 
-  // Initialize state with students
   const [updatedStudents, setUpdatedStudents] = useState(
     students.map((s) => ({
       ...s,
@@ -37,398 +96,282 @@ const Counselling = ({ students,goBack}) => {
     }))
   );
 
-  // Update session date
-  const handleDateChange = (id, date) => {
-    setUpdatedStudents((prev) =>
-      prev.map((s) => (s.student_id === id ? { ...s, session: date } : s))
-    );
-  };
-
-  // Update status
   const handleStatusChange = (id, value) => {
     setUpdatedStudents((prev) =>
       prev.map((s) => (s.student_id === id ? { ...s, status: value } : s))
     );
   };
 
-  // Notify student (future backend integration)
-
   const notifyMentor = async (student) => {
-  if (!student.counsellingType || !student.mentor) {
-    alert("Please select counselling type and assign a mentor first!");
-    return;
-  }
+    if (!student.counsellingType || !student.mentor) {
+      alert("Please select counselling type and assign a mentor first!");
+      return;
+    }
 
-  try {
-    const token = localStorage.getItem("token");
-
-    const res = await axios.post(
-      "http://127.0.0.1:5000/api/notifycounsellor",
-      {
-        studentName: student.name,
-        studentId: student.student_id,
-        counsellingType: student.counsellingType,
-        mentorName: student.mentor, // full name from dropdown
-      },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-
-    alert(res.data.msg || "Counsellor notified successfully!");
-  } catch (err) {
-    console.error(err);
-    alert(err?.response?.data?.msg || "Failed to notify counsellor");
-  }
-};
-
-  // const notifyStudent = async (student) => {
-  //   if (!student.session) {
-  //     alert("Please select a session date first!");
-  //     return;
-  //   }
-
-  //   const readableDate = new Date(student.session).toLocaleDateString("en-GB", {
-  //     day: "2-digit",
-  //     month: "short",
-  //     year: "numeric",
-  //   });
-
-  //   // Manual / Generated Meet link
-  //   const meetLink =
-  //     student.meet_link || "https://meet.google.com/ncc-psaz-wki";
-
-  //   try {
-  //     const token = localStorage.getItem("token"); 
-  //     const res = await axios.post(
-  //       "http://127.0.0.1:5000/api/notify", // ⬅️ ab Node.js pe jaayega
-  //       {
-  //         email: student.email,
-  //         name: student.name,
-  //         session_date: readableDate,
-  //         meet_link: meetLink,
-  //       },
-  //       {
-  //         headers: { Authorization: `Bearer ${token}` },
-  //       }
-  //     );
-
-  //     // ⬅️ Yahi missing tha: UI state update karo
-  //     setUpdatedStudents((prev) =>
-  //       prev.map((s) =>
-  //         s.student_id === student.student_id
-  //           ? { ...s, meet_link: meetLink }
-  //           : s
-  //       )
-  //     );
-
-  //     alert(res.data.msg || "Student notified");
-  //     console.log(res.data);
-  //   } catch (error) {
-  //     console.error(error);
-  //     alert(error?.response?.data?.msg || "Failed to notify student");
-  //   }
-  // };
-
-  // Function to mark student for counselling (can be called from Student.jsx)
-  const markForCounselling = async (student) => {
     try {
-      setUpdatedStudents((prev) => {
-        const exists = prev.find((s) => s.student_id === student.student_id);
+      const token = localStorage.getItem("token");
 
-        if (exists) {
-          // Agar student already list me hai → update karo
-          return prev.map((s) =>
-            s.student_id === student.student_id
-              ? { ...s, status: "Pending", session: null, meet_link: meetLink }
-              : s
-          );
-        } else {
-          // Agar student nahi hai → add karo
-          return [
-            ...prev,
-            {
-              ...student,
-              status: "Pending",
-              session: null,
-              meet_link: meetLink,
-            },
-          ];
+      const res = await axios.post(
+        "http://127.0.0.1:5000/api/notifycounsellor",
+        {
+          studentName: student.fullName || student.name,
+          studentId: student.studentId || student.student_id,
+          counsellingType: student.counsellingType,
+          mentorName: student.mentor,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-      });
+      );
 
-      // API call example (agar res ka use karna hai to pehle call karo)
-      // const res = await axios.post("/api/notify", { student, meetLink });
-
-      alert("Student notified successfully");
-    } catch (error) {
-      console.error(error);
-      alert(error?.response?.data?.msg || "Failed to notify student");
+      alert(res.data.msg || "Counsellor notified successfully!");
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.msg || "Failed to notify counsellor");
     }
   };
 
-  // Only show students with Pending, Ongoing, or Counselling status
   const counsellingStudents = updatedStudents.filter(
     (s) =>
       s.status === "Pending" ||
       s.status === "Ongoing" ||
       s.status === "Counselling"
   );
-  
-  
-
 
   return (
-    <section className="counselling-page">
-      <div className="content-wrapper">
-      {/* Hero Section */}
-      <button className="back-btn" onClick={goBack} style={{ marginBottom: "20px" }}>
-          ⬅ Back
-        </button>
-      <div className="counsel-hero">{/* For Image  */}</div>
-      {/* Main Card */}
-      <div className="full-card">
-        <div className="card-header">
-          <h2>Counseling</h2>
-          <p>Manage counselling sessions, mentors, status and notifications.</p>
-        </div>
+    <Fade in timeout={450}>
+      <Box sx={{ width: "100%", maxWidth: 1600, mx: "auto" }}>
+        <Button
+          startIcon={<ArrowBackRoundedIcon />}
+          onClick={goBack}
+          sx={{ mb: 2.5, fontWeight: 600 }}
+        >
+          Back
+        </Button>
 
-        <div className="counsel-list">
-          <table className="counsel-table">
-            <thead>
-              <tr>
-                <th>Student ID</th>
-                <th>Student</th>
-                <th>Counselling Type</th>
-                <th>Counsellor</th>
-                
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {counsellingStudents.map((s, i) => (
-                <tr key={i}>
-                  <td>{s.student_id}</td>
-                  <td>{s.name}</td>
-                                  {/* Counselling Type dropdown */}
-                  <td>
-                    <select
-                    value={s.counsellingType}
-                    onChange={(e) => {
-                      const type = e.target.value;
-                      setUpdatedStudents((prev) =>
-                        prev.map((st) =>
-                          st.student_id === s.student_id
-                            ? { ...st, counsellingType: type, mentor: "" }
-                            : st
-                        )
-                      );
-                    }}
-                  >
-                    <option value="">Select Type</option>
-                    {Object.keys(mentorsByType).map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
+        <Grow in timeout={500}>
+          <Card elevation={0} sx={{ border: "1px solid #e2e8f0", p: 1 }}>
+            <CardContent>
+              <Box className="flex items-center gap-2 mb-1">
+                <ForumRoundedIcon color="primary" />
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  Counseling
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Manage counselling sessions, mentors, status and notifications.
+              </Typography>
 
-                    {/* <select
-                      value={s.counsellingType}
-                      onChange={(e) => {
-                        const type = e.target.value;
-                        setUpdatedStudents((prev) =>
-                          prev.map((st) =>
-                            st.student_id === s.student_id
-                              ? { ...st, counsellingType: type, mentor: "" }
-                              : st
-                          )
-                        );
-                      }}
-                    >
-                      <option value="">Select Type</option>
-                      {Object.keys(mentorsByType).map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
+              {counsellingStudents.length === 0 ? (
+                <Box className="flex flex-col items-center justify-center py-14">
+                  <InboxRoundedIcon sx={{ fontSize: 48, color: "text.secondary", mb: 1.5 }} />
+                  <Typography color="text.secondary">
+                    No students marked for counselling.
+                  </Typography>
+                </Box>
+              ) : (
+                <TableContainer sx={{ overflowX: "auto" }}>
+                  <Table sx={{ minWidth: 900 }}>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: "#f8fafc" }}>
+                        <TableCell sx={{ fontWeight: 700 }}>Student ID</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Student</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Counselling Type</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Counsellor</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }} align="right">
+                          Action
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {counsellingStudents.map((s, i) => (
+                        <TableRow
+                          key={i}
+                          hover
+                          sx={{ "&:hover": { bgcolor: "rgba(37, 99, 235, 0.04)" } }}
+                        >
+                          <TableCell>{s.studentId}</TableCell>
+                          <TableCell>{s.fullName}</TableCell>
+
+                          {/* Counselling Type dropdown */}
+                          <TableCell>
+                            <TextField
+                              select
+                              size="small"
+                              value={s.counsellingType}
+                              onChange={(e) => {
+                                const type = e.target.value;
+                                setUpdatedStudents((prev) =>
+                                  prev.map((st) =>
+                                    st.studentId === s.studentId
+                                      ? { ...st, counsellingType: type, mentor: "" }
+                                      : st
+                                  )
+                                );
+                              }}
+                              sx={{ minWidth: 160 }}
+                            >
+                              <MenuItem value="">Select Type</MenuItem>
+                              {Object.keys(mentorsByType).map((type) => (
+                                <MenuItem key={type} value={type}>
+                                  {type}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </TableCell>
+
+                          {/* Counsellor dropdown */}
+                          <TableCell>
+                            <TextField
+                              select
+                              size="small"
+                              value={s.mentor}
+                              onChange={(e) =>
+                                setUpdatedStudents((prev) =>
+                                  prev.map((st) =>
+                                    st.studentId === s.studentId
+                                      ? { ...st, mentor: e.target.value }
+                                      : st
+                                  )
+                                )
+                              }
+                              disabled={!s.counsellingType}
+                              sx={{ minWidth: 160 }}
+                            >
+                              <MenuItem value="">Select Mentor</MenuItem>
+                              {s.counsellingType &&
+                                mentorsByType[s.counsellingType]?.map((m) => (
+                                  <MenuItem key={m} value={m}>
+                                    {m}
+                                  </MenuItem>
+                                ))}
+                            </TextField>
+                          </TableCell>
+
+                          {/* Status dropdown + Chip */}
+                          <TableCell>
+                            <Box className="flex items-center gap-2">
+                              <TextField
+                                select
+                                size="small"
+                                value={s.status}
+                                onChange={(e) =>
+                                  handleStatusChange(s.student_id, e.target.value)
+                                }
+                                sx={{ minWidth: 130 }}
+                              >
+                                <MenuItem value="Pending">Pending</MenuItem>
+                                <MenuItem value="Ongoing">Ongoing</MenuItem>
+                                <MenuItem value="Completed">Completed</MenuItem>
+                              </TextField>
+                              <Chip
+                                label={s.status}
+                                color={statusTone(s.status)}
+                                size="small"
+                                sx={{ fontWeight: 700 }}
+                              />
+                            </Box>
+                          </TableCell>
+
+                          {/* Notify / Join */}
+                          <TableCell align="right">
+                            <Box className="flex gap-1.5 justify-end">
+                              <Tooltip title="Notify Mentor">
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  startIcon={<NotificationsActiveRoundedIcon />}
+                                  onClick={() => notifyMentor(s)}
+                                  className="transition-all duration-200"
+                                  sx={{
+                                    "&:hover": { transform: "translateY(-2px)", boxShadow: 3 },
+                                  }}
+                                >
+                                  Notify
+                                </Button>
+                              </Tooltip>
+                              {s.meet_link && (
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="success"
+                                  startIcon={<VideoCallRoundedIcon />}
+                                  href={s.meet_link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="transition-all duration-200"
+                                  sx={{
+                                    "&:hover": { transform: "translateY(-2px)", boxShadow: 3 },
+                                  }}
+                                >
+                                  Join
+                                </Button>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </select> */}
-                  </td>
-
-                  {/* Counsellor dropdown */}
-                  <td>
-                    <select
-                    value={s.mentor}
-                    onChange={(e) =>
-                      setUpdatedStudents((prev) =>
-                        prev.map((st) =>
-                          st.student_id === s.student_id
-                            ? { ...st, mentor: e.target.value }
-                            : st
-                        )
-                      )
-                    }
-                    disabled={!s.counsellingType}
-                  >
-                    <option value="">Select Mentor</option>
-                    {s.counsellingType &&
-                      mentorsByType[s.counsellingType]?.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                  </select>
-
-                    {/* <select
-                      value={s.mentor}
-                      onChange={(e) =>
-                        setUpdatedStudents((prev) =>
-                          prev.map((st) =>
-                            st.student_id === s.student_id
-                              ? { ...st, mentor: e.target.value }
-                              : st
-                          )
-                        )
-                      }
-                      disabled={!s.counsellingType} // disable until type selected
-                    >
-                      <option value="">Select Mentor</option>
-                      {s.counsellingType &&
-                        mentorsByType[s.counsellingType].map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                    </select> */}
-                  </td>
-
-                 
-                 
-
-                  {/* Status dropdown */}
-                  <td>
-                    <select
-                      value={s.status}
-                      onChange={(e) =>
-                        handleStatusChange(s.student_id, e.target.value)
-                      }
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="Ongoing">Ongoing</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </td>
-
-                  {/* Notify button */}
-                  <td>
-                    <button
-                      className="small-btn"
-                      onClick={() => notifyMentor(s)}
-                    >
-                      Notify
-                    </button>
-                    {s.meet_link && (
-                      <a
-                        href={s.meet_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="small-btn join-btn"
-                        style={{
-                          marginLeft: "8px",
-                          background: "#22c55e",
-                          textDecoration: "none",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        Join
-                      </a>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {counsellingStudents.length === 0 && (
-                <tr>
-                  <td colSpan="5" style={{ textAlign: "center" }}>
-                    No students marked for counselling
-                  </td>
-                </tr>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               )}
-            </tbody>
-          </table>
-        </div>
 
-        {/* Suggestions Section */}
-        <div className="suggestion-section">
-          <h3>Suggestions & Solutions</h3>
-          <div className="suggestion-cards">
-            <div className="s-card">
-              <img
-                src="financial.jpg"
-                alt="Financial Strain"
-                className="s-card-icon"
-              />
-              <h4>Financial Strain</h4>
-              <p>
-                Offer scholarships, fee waivers, and part-time opportunities.
-              </p>
-            </div>
-            <div className="s-card">
-              <img
-                src="study.jpg"
-                alt="Academic Struggles"
-                className="s-card-icon"
-              />
-              <h4>Academic Struggles</h4>
-              <p>
-                Provide career counseling, tutoring, and mentorship programs.
-              </p>
-            </div>
-            <div className="s-card">
-              <img
-                src="stress.jpg"
-                alt="Mental Health"
-                className="s-card-icon"
-              />
-              <h4>Mental Health</h4>
-              <p>
-                Encourage peer support groups, therapy sessions, and wellness
-                activities.
-              </p>
-            </div>
-            <div className="s-card">
-              <img
-                src="career_guidance.jpg"
-                alt="Career Guidance"
-                className="s-card-icon"
-              />
-              <h4>Career Guidance</h4>
-              <p>
-                Encourage peer support groups, therapy sessions, and wellness
-                activities.
-              </p>
-            </div>
-
-            <div className="s-card">
-              <img
-                src="personalissue.jpg"
-                alt="Personal Issue"
-                className="s-card-icon"
-              />
-              <h4>Personal Issue Counselling</h4>
-              <p>
-                Encourage peer support groups, therapy sessions, and wellness
-                activities.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
-
-    </section>
+              {/* Suggestions Section */}
+              <Box sx={{ mt: 4 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2.5 }}>
+                  Suggestions & Solutions
+                </Typography>
+                <Grid container spacing={2.5}>
+                  {suggestions.map((s, idx) => (
+                    <Grid item xs={12} sm={6} md={4} lg={true} key={s.title} sx={{ flexGrow: 1 }}>
+                      <Grow in timeout={350 + idx * 120}>
+                        <Card
+                          elevation={0}
+                          className="transition-all duration-300"
+                          sx={{
+                            height: "100%",
+                            textAlign: "center",
+                            bgcolor: "#f1f5f9",
+                            border: "1px solid #e2e8f0",
+                            "&:hover": {
+                              transform: "translateY(-5px)",
+                              bgcolor: "#fff",
+                              boxShadow: "0 10px 22px -8px rgba(15, 23, 42, 0.15)",
+                            },
+                          }}
+                        >
+                          <CardContent>
+                            <Avatar
+                              sx={{
+                                bgcolor: "primary.main",
+                                width: 56,
+                                height: 56,
+                                mx: "auto",
+                                mb: 1.5,
+                              }}
+                            >
+                              {s.icon}
+                            </Avatar>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                              {s.title}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {s.desc}
+                            </Typography>
+                          </CardContent>
+                        </Card>
+                      </Grow>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grow>
+      </Box>
+    </Fade>
   );
 };
 
 export default Counselling;
-
