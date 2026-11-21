@@ -13,19 +13,87 @@ const quizRateLimit = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeader
 
 router.use(quizRateLimit);
 
+const exactMatch = (value) =>
+  new RegExp(`^\\s*${String(value).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+
+const getStudentQuizScope = (student) => {
+  const course = student.courseApplied?.trim();
+  if (!course) return null;
+
+  const scope = { courseApplied: exactMatch(course) };
+  const branch = student.branchSpecialization?.trim();
+  scope.$or = [{ branchSpecialization: { $in: ["", null] } }];
+  if (branch) scope.$or.push({ branchSpecialization: exactMatch(branch) });
+  return scope;
+};
+
+const findActiveQuizForStudent = async (studentId, quizId) => {
+  const student = await Student.findById(studentId).select(
+    "fullName email courseApplied branchSpecialization"
+  );
+  if (!student) return { student: null, quiz: null };
+
+  const scope = getStudentQuizScope(student);
+  if (!scope) return { student, quiz: null };
+
+  const now = new Date();
+  const query = {
+    ...scope,
+    isActive: true,
+    startTime: { $lte: now },
+    endTime: { $gte: now },
+  };
+  if (quizId) query._id = quizId;
+
+  const quiz = await Quiz.findOne(query).sort({ startTime: -1 });
+  return { student, quiz };
+};
+
 router.post("/create", verifyToken, requireRole("mentor"), async (req, res) => {
   try {
-    const { title, description, latitude, longitude, allowedRadius, startTime, endTime } = req.body;
+    const {
+      title,
+      description,
+      courseApplied,
+      branchSpecialization,
+      latitude,
+      longitude,
+      allowedRadius,
+      startTime,
+      endTime,
+    } = req.body;
     if (
       typeof title !== "string" ||
       !title.trim() ||
+      typeof courseApplied !== "string" ||
+      !courseApplied.trim() ||
       latitude === undefined ||
       longitude === undefined ||
       allowedRadius === undefined ||
       !startTime ||
       !endTime
     ) {
-      return res.status(400).json({ error: "All quiz fields are required" });
+      return res.status(400).json({ error: "Quiz title, course, location and schedule are required" });
+    }
+
+    const normalizedCourse = courseApplied.trim();
+    const normalizedBranch = typeof branchSpecialization === "string"
+      ? branchSpecialization.trim()
+      : "";
+    const coursePattern = exactMatch(normalizedCourse);
+    const courseExists = await Student.exists({ courseApplied: coursePattern });
+    if (!courseExists) {
+      return res.status(400).json({ error: "No students are enrolled in the selected course" });
+    }
+
+    if (normalizedBranch) {
+      const branchExists = await Student.exists({
+        courseApplied: coursePattern,
+        branchSpecialization: exactMatch(normalizedBranch),
+      });
+      if (!branchExists) {
+        return res.status(400).json({ error: "No students are enrolled in the selected branch" });
+      }
     }
 
     const quizLatitude = Number(latitude);
@@ -46,13 +114,18 @@ router.post("/create", verifyToken, requireRole("mentor"), async (req, res) => {
       return res.status(400).json({ error: "Enter valid coordinates and a positive radius" });
     }
 
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-      return res.status(400).json({ error: "Invalid quiz time range" });
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return res.status(400).json({ error: "Enter valid quiz start and end date/time" });
+    }
+    if (end <= start) {
+      return res.status(400).json({ error: "End date and time must be after the start date and time" });
     }
 
     const quiz = await Quiz.create({
       title: String(title).trim().slice(0, 150),
       description: String(description || "").trim().slice(0, 1000),
+      courseApplied: normalizedCourse,
+      branchSpecialization: normalizedBranch,
       latitude: quizLatitude,
       longitude: quizLongitude,
       allowedRadius: radius,
@@ -72,17 +145,16 @@ router.post("/create", verifyToken, requireRole("mentor"), async (req, res) => {
 });
 
 router.get("/active", verifyToken, requireRole("student"), async (req, res) => {
-  const now = new Date();
-  const quiz = await Quiz.findOne({ isActive: true, startTime: { $lte: now }, endTime: { $gte: now } }).sort({ startTime: -1 });
-  if (!quiz) return res.status(404).json({ error: "No active quiz available" });
+  const { quiz } = await findActiveQuizForStudent(req.user.id);
+  if (!quiz) return res.status(404).json({ error: "No active quiz available for your course or branch" });
   res.json({ quiz });
 });
 
 router.get("/check-attempt", verifyToken, requireRole("student"), async (req, res) => {
-  const quiz = await Quiz.findOne({ isActive: true, startTime: { $lte: new Date() }, endTime: { $gte: new Date() } }).sort({ startTime: -1 });
-  if (!quiz) return res.status(404).json({ submitted: false, error: "No active quiz available" });
+  const { quiz } = await findActiveQuizForStudent(req.user.id, req.query.quizId);
+  if (!quiz) return res.status(404).json({ submitted: false, error: "No active quiz available for your course or branch" });
   const existing = await QuizSubmission.findOne({ quizId: quiz._id, studentId: req.user.id });
-  res.json({ submitted: Boolean(existing), quizId: quiz._id });
+  res.json({ submitted: Boolean(existing), quizId: quiz._id, quiz });
 });
 
 router.post("/submit", verifyToken, requireRole("student"), async (req, res) => {
@@ -90,8 +162,11 @@ router.post("/submit", verifyToken, requireRole("student"), async (req, res) => 
     const { quizId, latitude, longitude, answers } = req.body;
     const now = new Date();
 
-    const quiz = await Quiz.findOne({ _id: quizId, isActive: true, startTime: { $lte: now }, endTime: { $gte: now } });
-    if (!quiz) return res.status(400).json({ error: "Quiz is not active or has expired" });
+    const { student, quiz } = await findActiveQuizForStudent(req.user.id, quizId);
+    if (!student) return res.status(404).json({ error: "Student not found" });
+    if (!quiz) {
+      return res.status(403).json({ error: "This quiz is not active or is not assigned to your course or branch" });
+    }
 
     const studentLatitude = Number(latitude);
     const studentLongitude = Number(longitude);
@@ -126,9 +201,6 @@ router.post("/submit", verifyToken, requireRole("student"), async (req, res) => 
       return res.status(400).json({ error: "Invalid quiz answers" });
     }
 
-    const student = await Student.findById(req.user.id).select("fullName email");
-    if (!student) return res.status(404).json({ error: "Student not found" });
-
     await QuizSubmission.create({
       quizId: quiz._id,
       studentId: student._id,
@@ -156,6 +228,30 @@ router.get("/mentor", verifyToken, requireRole("mentor"), async (req, res) => {
   res.json({ quizzes });
 });
 
+router.get("/mentor/targets", verifyToken, requireRole("mentor"), async (req, res) => {
+  const courses = await Student.aggregate([
+    { $match: { courseApplied: { $type: "string", $regex: "\\S" } } },
+    {
+      $group: {
+        _id: "$courseApplied",
+        branches: { $addToSet: "$branchSpecialization" },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  res.json({
+    targets: courses.map((item) => ({
+      course: item._id.trim(),
+      branches: [...new Set(
+        item.branches
+          .filter((branch) => typeof branch === "string" && branch.trim())
+          .map((branch) => branch.trim())
+      )].sort((a, b) => a.localeCompare(b)),
+    })),
+  });
+});
+
 router.get("/mentor/submissions", verifyToken, requireRole("mentor"), async (req, res) => {
   const ownedQuizIds = await Quiz.distinct("_id", { createdBy: req.user.id });
   const submissions = await QuizSubmission.find({ quizId: { $in: ownedQuizIds } })
@@ -176,6 +272,14 @@ router.get("/mentor/submission/:id", verifyToken, requireRole("mentor"), async (
 });
 
 const getRandomQuestions = async (req, res) => {
+  if (!req.query.quizId) {
+    return res.status(400).json({ error: "quizId is required" });
+  }
+  const { quiz } = await findActiveQuizForStudent(req.user.id, req.query.quizId);
+  if (!quiz) {
+    return res.status(403).json({ error: "This quiz is not assigned to your course or branch" });
+  }
+
   const count = Math.min(Math.max(Number(req.query.count) || 10, 1), 50);
   const questions = await Question.aggregate([{ $sample: { size: count } }]);
   res.json({ questions: questions.map((q) => ({

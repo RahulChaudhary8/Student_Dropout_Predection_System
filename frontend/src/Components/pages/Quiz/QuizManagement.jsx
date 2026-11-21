@@ -9,6 +9,7 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  MenuItem,
   Snackbar,
   Stack,
   Table,
@@ -32,6 +33,8 @@ const API = "http://localhost:5000";
 const EMPTY_FORM = {
   title: "",
   description: "",
+  courseApplied: "",
+  branchSpecialization: "",
   latitude: "",
   longitude: "",
   allowedRadius: "100",
@@ -56,6 +59,7 @@ export default function QuizManagement() {
   const auth = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
   const [quizzes, setQuizzes] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [courseTargets, setCourseTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -68,12 +72,14 @@ export default function QuizManagement() {
 
   const load = useCallback(async () => {
     try {
-      const [quizRes, submissionRes] = await Promise.all([
+      const [quizRes, submissionRes, targetRes] = await Promise.all([
         axios.get(`${API}/api/quiz/mentor`, auth),
         axios.get(`${API}/api/quiz/mentor/submissions`, auth),
+        axios.get(`${API}/api/quiz/mentor/targets`, auth),
       ]);
       setQuizzes(quizRes.data.quizzes);
       setSubmissions(submissionRes.data.submissions);
+      setCourseTargets(targetRes.data.targets);
     } catch (error) {
       notify(error.response?.data?.error || "Unable to load quiz data.", "error");
     } finally {
@@ -87,11 +93,26 @@ export default function QuizManagement() {
 
   const updateForm = (event) => {
     const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === "courseApplied" ? { branchSpecialization: "" } : {}),
+    }));
   };
 
   const createQuiz = async (event) => {
     event.preventDefault();
+    const start = new Date(form.startTime);
+    const end = new Date(form.endTime);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      notify("Enter valid quiz start and end date/time.", "error");
+      return;
+    }
+    if (end <= start) {
+      notify("End date and time must be after the start date and time.", "error");
+      return;
+    }
+
     setSaving(true);
     try {
       await axios.post(
@@ -113,6 +134,9 @@ export default function QuizManagement() {
       setSaving(false);
     }
   };
+
+  const selectedCourse = courseTargets.find((target) => target.course === form.courseApplied);
+  const availableBranches = selectedCourse?.branches || [];
 
   const useLocation = () => {
     if (!navigator.geolocation) {
@@ -198,17 +222,45 @@ export default function QuizManagement() {
               <AddLocationAltRoundedIcon color="primary" />
               <Box>
                 <Typography variant="h6" sx={{ fontWeight: 750 }}>Create a quiz</Typography>
-                <Typography variant="body2" color="text.secondary">Set the quiz schedule and the location students must be near.</Typography>
+                <Typography variant="body2" color="text.secondary">Choose the course and optional branch that can access this quiz, then set its schedule and location.</Typography>
               </Box>
             </Stack>
 
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
               <TextField name="title" label="Quiz title" value={form.title} onChange={updateForm} required inputProps={{ maxLength: 150 }} sx={fieldSx} />
+              <TextField
+                select
+                name="courseApplied"
+                label="Course"
+                value={form.courseApplied}
+                onChange={updateForm}
+                required
+                sx={fieldSx}
+              >
+                {courseTargets.length === 0 && <MenuItem value="" disabled>No student courses available</MenuItem>}
+                {courseTargets.map((target) => (
+                  <MenuItem key={target.course} value={target.course}>{target.course}</MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                name="branchSpecialization"
+                label="Branch (optional)"
+                value={form.branchSpecialization}
+                onChange={updateForm}
+                disabled={!form.courseApplied}
+                sx={fieldSx}
+              >
+                <MenuItem value="">All branches</MenuItem>
+                {availableBranches.map((branch) => (
+                  <MenuItem key={branch} value={branch}>{branch}</MenuItem>
+                ))}
+              </TextField>
               <TextField name="allowedRadius" label="Allowed radius (meters)" type="number" value={form.allowedRadius} onChange={updateForm} required inputProps={{ min: 1, step: 1 }} sx={fieldSx} />
               <TextField name="latitude" label="Latitude" type="number" value={form.latitude} onChange={updateForm} required inputProps={{ min: -90, max: 90, step: "any" }} sx={fieldSx} />
               <TextField name="longitude" label="Longitude" type="number" value={form.longitude} onChange={updateForm} required inputProps={{ min: -180, max: 180, step: "any" }} sx={fieldSx} />
               <TextField name="startTime" label="Start date and time" type="datetime-local" value={form.startTime} onChange={updateForm} required InputLabelProps={{ shrink: true }} sx={fieldSx} />
-              <TextField name="endTime" label="End date and time" type="datetime-local" value={form.endTime} onChange={updateForm} required InputLabelProps={{ shrink: true }} sx={fieldSx} />
+              <TextField name="endTime" label="End date and time" type="datetime-local" value={form.endTime} onChange={updateForm} required inputProps={{ min: form.startTime }} InputLabelProps={{ shrink: true }} sx={fieldSx} />
               <TextField name="description" label="Description (optional)" value={form.description} onChange={updateForm} multiline minRows={2} inputProps={{ maxLength: 1000 }} sx={{ ...fieldSx, gridColumn: { md: "1 / -1" } }} />
             </Box>
 
@@ -260,7 +312,7 @@ export default function QuizManagement() {
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow>
-                    {["Title", "Status", "Location", "Radius", "Starts", "Ends"].map((heading) => (
+                    {["Title", "Course", "Branch", "Status", "Location", "Radius", "Starts", "Ends"].map((heading) => (
                       <TableCell key={heading} sx={{ bgcolor: "#f8fafc", fontWeight: 750, whiteSpace: "nowrap" }}>{heading}</TableCell>
                     ))}
                   </TableRow>
@@ -272,6 +324,8 @@ export default function QuizManagement() {
                     return (
                       <TableRow hover key={quiz._id}>
                         <TableCell sx={{ fontWeight: 650 }}>{quiz.title}</TableCell>
+                        <TableCell>{quiz.courseApplied}</TableCell>
+                        <TableCell>{quiz.branchSpecialization || "All branches"}</TableCell>
                         <TableCell><Chip size="small" color={active ? "success" : "default"} label={active ? "Active" : "Scheduled / ended"} /></TableCell>
                         <TableCell sx={{ whiteSpace: "nowrap" }}>{Number(quiz.latitude).toFixed(5)}, {Number(quiz.longitude).toFixed(5)}</TableCell>
                         <TableCell>{quiz.allowedRadius} m</TableCell>

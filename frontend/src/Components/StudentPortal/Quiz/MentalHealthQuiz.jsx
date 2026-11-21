@@ -72,6 +72,7 @@ export default function MentalHealthQuiz({ onBack }) {
       try {
         const attempt = await axios.get(`${API}/api/quiz/check-attempt`, auth);
         if (!active) return;
+        setQuiz(attempt.data.quiz);
         if (attempt.data.submitted) {
           setStage("submitted");
           setMessage("You have already submitted this quiz.");
@@ -119,7 +120,10 @@ export default function MentalHealthQuiz({ onBack }) {
             return;
           }
 
-          const attempt = await axios.get(`${API}/api/quiz/check-attempt`, auth);
+          const attempt = await axios.get(
+            `${API}/api/quiz/check-attempt?quizId=${encodeURIComponent(activeQuizData._id)}`,
+            auth
+          );
           if (attempt.data.submitted) {
             setStage("submitted");
             setMessage("You have already submitted this quiz.");
@@ -127,7 +131,7 @@ export default function MentalHealthQuiz({ onBack }) {
           }
 
           const questionRes = await axios.get(
-            `${API}/api/quiz/questions/random?count=10`,
+            `${API}/api/quiz/questions/random?count=10&quizId=${encodeURIComponent(activeQuizData._id)}`,
             auth
           );
           if (questionRes.data.questions.length !== 10) {
@@ -277,10 +281,13 @@ export default function MentalHealthQuiz({ onBack }) {
                 <PsychologyRoundedIcon sx={{ fontSize: 42 }} />
               </Box>
               <Typography variant="h4" sx={{ fontWeight: 850, color: "#172033", fontSize: { xs: 26, sm: 34 } }}>
-                Mental Health Check-in
+                {quiz?.title || "Quiz"}
               </Typography>
               <Typography sx={{ mt: 1.5, color: "#64748b", lineHeight: 1.75 }}>
-                Take a few minutes to reflect on how you have been feeling. This quiz has 10 questions and your responses will be shared only with your mentor.
+                {quiz?.description || "Take a few minutes to complete this quiz."} This quiz has 10 questions and your responses will be shared only with your mentor.
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1, color: "#64748b" }}>
+                For {quiz?.courseApplied}{quiz?.branchSpecialization ? ` — ${quiz.branchSpecialization}` : " — all branches"}
               </Typography>
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 1.5, my: 3, textAlign: "left" }}>
                 {[

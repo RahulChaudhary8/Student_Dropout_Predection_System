@@ -118,6 +118,145 @@ router.post("/", async (req, res) => {
   }
 });
 
+// POST - Create complete student records from an admin Excel upload.
+router.post("/bulk-upload", async (req, res) => {
+  const { students } = req.body;
+
+  if (!Array.isArray(students) || students.length === 0) {
+    return res.status(400).json({ error: "A non-empty students array is required" });
+  }
+
+  const requiredFields = [
+    "fullName",
+    "dateOfBirth",
+    "gender",
+    "fathersName",
+    "mothersName",
+    "category",
+    "aadharNumber",
+    "email",
+    "phoneNumber",
+    "permanentAddress",
+    "currentAddress",
+    "parentContactNumber",
+    "parentEmergencyNumber",
+    "courseApplied",
+    "previousQualification",
+    "boardUniversityName",
+    "yearOfAddmission",
+    "yearOfPassing",
+    "nationality",
+  ];
+  const allowedFields = [
+    ...requiredFields,
+    "bloodGroup",
+    "branchSpecialization",
+    "entranceExamScore",
+    "fatherOccupation",
+    "motherOccupation",
+    "annualFamilyIncome",
+    "totalCourseFees",
+    "feeStructure",
+    "scholarshipApplicable",
+    "paymentMode",
+    "religion",
+    "hostelRequired",
+    "transportRequired",
+  ];
+  const numericFields = ["yearOfAddmission", "yearOfPassing", "annualFamilyIncome", "totalCourseFees"];
+  const seenEmails = new Set();
+  const createdIds = [];
+  const errors = [];
+
+  for (const [index, row] of students.entries()) {
+    try {
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        throw new Error("Row must contain student fields");
+      }
+
+      const studentData = {};
+      for (const field of allowedFields) {
+        const value = row[field];
+        if (value !== undefined && value !== null && String(value).trim() !== "") {
+          studentData[field] = typeof value === "string" ? value.trim() : value;
+        }
+      }
+
+      const missingFields = requiredFields.filter(
+        (field) => studentData[field] === undefined || studentData[field] === ""
+      );
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+      }
+
+      studentData.email = String(studentData.email).trim().toLowerCase();
+      if (seenEmails.has(studentData.email)) {
+        throw new Error("Duplicate email in uploaded file");
+      }
+      seenEmails.add(studentData.email);
+
+      for (const field of numericFields) {
+        if (studentData[field] !== undefined) {
+          const value = studentData[field];
+          const directNumber = Number(value);
+          const numberValue = Number.isFinite(directNumber)
+            ? directNumber
+            : Number(String(value).replace(/[^0-9.-]/g, ""));
+          if (!Number.isFinite(numberValue)) {
+            throw new Error(`${field} must be a valid number`);
+          }
+          studentData[field] = numberValue;
+        }
+      }
+
+      const existingStudent = await Student.findOne({ email: studentData.email });
+      if (existingStudent) {
+        throw new Error("A student with this email already exists");
+      }
+
+      const identity = await resolveStudentIdentity({});
+      const hashedPassword = await bcrypt.hash(identity.plainPassword, 10);
+      const coursePattern = studentData.courseApplied.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const mentors = await Mentor.find({
+        specialization: { $regex: new RegExp(coursePattern, "i") },
+        active: true,
+      });
+
+      let assignedMentor = null;
+      if (mentors.length > 0) {
+        const lastIndex = mentorCounters[studentData.courseApplied] ?? -1;
+        const nextIndex = (lastIndex + 1) % mentors.length;
+        assignedMentor = mentors[nextIndex];
+        mentorCounters[studentData.courseApplied] = nextIndex;
+      }
+
+      const student = await Student.create({
+        ...studentData,
+        studentId: identity.studentId,
+        password: hashedPassword,
+        plainPassword: identity.plainPassword,
+        assignedMentorId: assignedMentor?._id ?? null,
+      });
+      createdIds.push(student.studentId);
+    } catch (error) {
+      console.warn(`Bulk student upload row ${index + 2} failed:`, error.message);
+      errors.push({
+        row: index + 2,
+        email: row?.email || "",
+        error: error.message,
+      });
+    }
+  }
+
+  res.json({
+    message: `${createdIds.length} student(s) created, ${errors.length} row(s) failed`,
+    created: createdIds.length,
+    createdIds,
+    failed: errors.length,
+    errors,
+  });
+});
+
 // GET - Fetch All Students
 router.get("/", async (req, res) => {
   try {
@@ -129,6 +268,76 @@ router.get("/", async (req, res) => {
     res.json(studentsWithPassword);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch students" });
+  }
+});
+
+// PUT - Bulk update selected students
+router.put("/bulk-update", async (req, res) => {
+  try {
+    const { studentIds, updates } = req.body;
+
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      return res.status(400).json({ error: "Please select at least one student" });
+    }
+
+    if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+      return res.status(400).json({ error: "Update fields are required" });
+    }
+
+    const allowedFields = new Set([
+      "fullName",
+      "courseApplied",
+      "branchSpecialization",
+      "yearOfAddmission",
+      "yearOfPassing",
+      "phoneNumber",
+      "parentContactNumber",
+      "parentEmergencyNumber",
+      "totalCourseFees",
+      "scholarshipApplicable",
+      "hostelRequired",
+      "transportRequired",
+      "assignedMentorId",
+    ]);
+
+    const updateData = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.has(key) && value !== "" && value !== null && value !== undefined) {
+        updateData[key] = value;
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: "Please provide at least one valid field to update" });
+    }
+
+    if (updateData.assignedMentorId === "__NONE__") {
+      updateData.assignedMentorId = null;
+    }
+
+    if (updateData.yearOfAddmission !== undefined) {
+      updateData.yearOfAddmission = Number(updateData.yearOfAddmission);
+    }
+    if (updateData.yearOfPassing !== undefined) {
+      updateData.yearOfPassing = Number(updateData.yearOfPassing);
+    }
+    if (updateData.totalCourseFees !== undefined) {
+      updateData.totalCourseFees = Number(updateData.totalCourseFees);
+    }
+
+    const result = await Student.updateMany(
+      { _id: { $in: studentIds } },
+      { $set: updateData }
+    );
+
+    res.json({
+      message: `✅ ${result.modifiedCount} student(s) updated successfully`,
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Bulk student update error:", error);
+    res.status(500).json({ error: "Failed to update selected students" });
   }
 });
 

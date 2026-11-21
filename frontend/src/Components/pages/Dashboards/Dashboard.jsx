@@ -44,6 +44,7 @@ import {
   Menu,
   MenuItem,
   CircularProgress,
+  Alert,
 } from "@mui/material";
 
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
@@ -997,6 +998,14 @@ const Dashboard = () => {
                               </Button>
                             </Box>
                           </Box>
+
+                          <Alert severity="info" sx={{ mb: 2 }}>
+                            Excel se existing students update karne ke liye <strong>Student ID</strong> column
+                            zaroor dein, aur har ID database mein maujood student se match honi chahiye.
+                            ID blank ya unmatched hone par existing student update nahi hoga; system use
+                            naya student samajh sakta hai. Accurate risk prediction ke liye Excel mein model
+                            ke sabhi feature columns bhi bharein.
+                          </Alert>
 
                           <TableContainer sx={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
                             <Table stickyHeader size="small">
