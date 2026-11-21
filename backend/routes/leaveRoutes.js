@@ -1,24 +1,26 @@
 import express from "express";
 import Leave from "../models/Leave.js";
 import Student from "../models/Student.js";
+import { verifyToken } from "../middleware/authMiddleware.js";
+import { requireRole } from "../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
 // Student submits leave
-router.post("/", async (req, res) => {
+router.post("/", verifyToken, requireRole("student"), async (req, res) => {
   try {
-    const { studentId, leaveType, startDate, endDate, reason } = req.body;
+    const { leaveType, startDate, endDate, reason } = req.body;
 
-    if (!studentId || !leaveType || !startDate || !endDate || !reason) {
+    if (!leaveType || !startDate || !endDate || !reason) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const student = await Student.findOne({ studentId });
+    const student = await Student.findById(req.user.id);
     if (!student) return res.status(404).json({ error: "Student not found" });
 
     const leave = new Leave({
-      studentId,
-      studentName: student.fullName, // correct field
+      studentId: student._id,
+      studentName: student.fullName,
       leaveType,
       startDate,
       endDate,
@@ -43,9 +45,13 @@ router.get("/", async (req, res) => {
 });
 
 // Get leaves for specific student
-router.get("/student/:id", async (req, res) => {
+router.get("/student/:id", verifyToken, requireRole("student"), async (req, res) => {
   try {
-    const leaves = await Leave.find({ studentId: req.params.id });
+    if (String(req.user.id) !== req.params.id) {
+      return res.status(403).json({ error: "You can only view your own leave requests" });
+    }
+
+    const leaves = await Leave.find({ studentId: req.user.id });
     res.json(leaves);
   } catch (err) {
     res.status(500).json({ error: err.message });

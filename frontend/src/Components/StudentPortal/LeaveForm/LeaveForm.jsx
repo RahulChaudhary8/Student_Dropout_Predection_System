@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import {
   Box,
@@ -40,18 +40,22 @@ const LeaveForm = ({ studentId }) => {
   const [myLeaves, setMyLeaves] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  const fetchLeaves = async () => {
+  const fetchLeaves = useCallback(async () => {
+    if (!studentId) return;
     try {
-      const res = await axios.get(`http://localhost:5000/api/leaves/student/${studentId}`);
+      const token = localStorage.getItem("token");
+      const res = await axios.get(`http://localhost:5000/api/leaves/student/${studentId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setMyLeaves(res.data);
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [studentId]);
 
   useEffect(() => {
-    if (studentId) fetchLeaves();
-  }, [studentId]);
+    fetchLeaves();
+  }, [fetchLeaves]);
 
   const isError = message.toLowerCase().includes("error");
 
@@ -62,12 +66,14 @@ const LeaveForm = ({ studentId }) => {
       return;
     }
     try {
+      const token = localStorage.getItem("token");
       await axios.post("http://localhost:5000/api/leaves", {
-        studentId,
         leaveType,
         startDate,
         endDate,
         reason,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
       });
       setMessage("Leave request submitted successfully!");
       setLeaveType("");
@@ -77,7 +83,7 @@ const LeaveForm = ({ studentId }) => {
       fetchLeaves();
     } catch (err) {
       console.error(err);
-      setMessage("Error submitting leave request.");
+      setMessage(`Error submitting leave request: ${err.response?.data?.error || "Please try again."}`);
     }
   };
 

@@ -76,7 +76,7 @@ export default function ViewSubmission() {
           onClick={goBack}
           startIcon={<ArrowBackRoundedIcon />}
           variant="outlined"
-          sx={{ mb: 2.5, borderRadius: 2, textTransform: "none", fontWeight: 700 }}
+          sx={{ mb: 2.5, borderRadius: 2, textTransform: "none", fontWeight: 700, mt: 5 }}
         >
           Back to submissions
         </Button>
