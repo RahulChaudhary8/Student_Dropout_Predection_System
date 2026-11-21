@@ -16,6 +16,9 @@ import Footer from "./Components/pages/Footers/Footer";
 import LoginOptions from "./Components/pages/Authentication/LoginOptions";
 import AdminDashboard from "./Components/Admin/AdminDashboard/AdminDashboard";
 import StudentPortal from "./Components/StudentPortal/StudentDashboard/StudentDashboard";
+import MentalHealthQuiz from "./Components/StudentPortal/Quiz/MentalHealthQuiz";
+import QuizManagement from "./Components/pages/Quiz/QuizManagement";
+import ViewSubmission from "./Components/pages/Quiz/ViewSubmission";
 
 
 function App() {
@@ -37,6 +40,9 @@ function App() {
         <Route path="/loginoptions" element={<LoginOptions />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/studentportal" element={<StudentPortal/>} />
+        <Route path="/student/quiz" element={<MentalHealthQuiz />} />
+        <Route path="/mentor/quiz-management" element={<QuizManagement />} />
+        <Route path="/mentor/quiz/submissions/:id" element={<ViewSubmission />} />
 
         {/* Protected routes */}
         <Route

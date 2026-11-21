@@ -21,8 +21,6 @@ const studentSchema = new mongoose.Schema(
       required: true,
     },
     aadharNumber: { type: String, required: true, match: /^[0-9]{12}$/ },
-    photo: { type: String },
-    signature: { type: String },
 
     // ---- Contact Information ----
     email: { type: String, required: true, unique: true },
@@ -71,14 +69,6 @@ const studentSchema = new mongoose.Schema(
       enum: ["Yes", "No", "Overdue"],
       default: "No",
     },
-
-    // ---- Documents (file paths/URLs from multer) ----
-    marksheet10th: { type: String },
-    marksheet12th: { type: String },
-    transferCertificate: { type: String },
-    migrationCertificate: { type: String },
-    casteCertificate: { type: String },
-    incomeCertificate: { type: String },
 
     // ---- Other ----
     nationality: { type: String, required: true },

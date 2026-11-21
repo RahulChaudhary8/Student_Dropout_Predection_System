@@ -42,6 +42,8 @@ app.use("/api/role-auth", roleAuthRouter);
 app.use("/api/student-profile", studentProfileRoutes);
 app.use("/api/mentor-profile", mentorProfileRoutes);
 app.use("/api/quiz", quizRoutes);
+app.use("/api/questions", quizRoutes);
+app.use("/api/mentor", quizRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/notes", notesRouter);
 app.use("/api/classes", classRoutes);

@@ -40,9 +40,9 @@ const SemesterScore = ({ students = [], goBack }) => {
   useEffect(() => {
     setScoreData(
       students.map((s) => ({
-        student_id: s.student_id,
-        name: s.name,
-        course: s.course,
+        studentId: s.studentId || s.studentId || "",
+        fullName: s.fullName || s.fullName || "",
+        courseApplied: s.courseApplied || s.courseApplied || "",
         Sem1: s.Sem1 || "", Sem2: s.Sem2 || "",
         Sem3: s.Sem3 || "", Sem4: s.Sem4 || "",
         Sem5: s.Sem5 || "", Sem6: s.Sem6 || "",
@@ -295,14 +295,14 @@ const SemesterScore = ({ students = [], goBack }) => {
                           }}
                         >
                           <TableCell sx={{ fontSize: "0.82rem", color: "#64748b", py: 1 }}>
-                            {s.student_id || "-"}
+                            {s.studentId || "-"}
                           </TableCell>
                           <TableCell sx={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b", py: 1 }}>
-                            {s.name || "-"}
+                            {s.fullName || "-"}
                           </TableCell>
                           <TableCell sx={{ py: 1 }}>
                             <Chip
-                              label={s.course || "-"}
+                              label={s.courseApplied || "-"}
                               size="small"
                               sx={{ backgroundColor: "#ede9fe", color: "#6d28d9", fontWeight: 600, fontSize: "0.72rem", height: 22 }}
                             />

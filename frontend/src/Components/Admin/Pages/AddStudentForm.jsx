@@ -5,7 +5,6 @@ import {
   Typography,
   Card,
   CardContent,
-  Grid,
   TextField,
   MenuItem,
   Button,
@@ -22,7 +21,6 @@ import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
-import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 
 // ---- Field definitions (key must match initialState) ----
 const sections = [
@@ -54,8 +52,6 @@ const sections = [
         options: ["General", "OBC", "SC", "ST", "EWS"],
       },
       { key: "aadharNumber", label: "Aadhar Number", type: "text" },
-      { key: "photo", label: "Photo (Accept only jpeg/png)", type: "file", accept: "image/jpeg,image/png" },
-      { key: "signature", label: "Signature (Accept only jpeg/png)", type: "file", accept: "image/jpeg,image/png" },
     ],
   },
   {
@@ -135,22 +131,6 @@ const sections = [
     ],
   },
   {
-    title: "Documents",
-    icon: <DescriptionRoundedIcon />,
-    fields: [
-      { key: "marksheet10th", label: "10th Marksheet(accept only pdf file)", type: "file", accept: "application/pdf" },
-      { key: "marksheet12th", label: "12th Marksheet(accept only pdf file)", type: "file", accept: "application/pdf" },
-      { key: "transferCertificate", label: "Transfer Certificate (accept only pdf file)", type: "file", accept: "application/pdf" },
-      { key: "migrationCertificate", label: "Migration Certificate(accept only pdf file)", type: "file", accept: "application/pdf" },
-      {
-        key: "casteCertificate",
-        label: "Caste Certificate (accept only pdf file/jpeg/png)",
-        type: "file", accept: "application/pdf,image/jpeg,image/png"
-      },
-      { key: "incomeCertificate", label: "Income Certificate(accept only pdf file/jpeg/png)", type: "file", accept: "application/pdf,image/jpeg,image/png" },
-    ],
-  },
-  {
     title: "Other",
     icon: <PublicRoundedIcon />,
     fields: [
@@ -174,18 +154,15 @@ const sections = [
 
 // ---- Build initialState automatically from the sections above ----
 // (so form fields and state can never drift out of sync again)
-const fileKeys = [];
 const initialState = {};
 sections.forEach((section) => {
   section.fields.forEach((field) => {
-    initialState[field.key] = field.type === "number" ? "" : "";
-    if (field.type === "file") fileKeys.push(field.key);
+    initialState[field.key] = "";
   });
 });
 
 const AddStudentForm = ({ onStudentAdded }) => {
   const [studentData, setStudentData] = useState(initialState);
-  const [files, setFiles] = useState({});
   const [generatedPassword, setGeneratedPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -193,32 +170,19 @@ const AddStudentForm = ({ onStudentAdded }) => {
     setStudentData({ ...studentData, [e.target.name]: e.target.value });
   };
 
-  const handleFileChange = (e) => {
-    const { name, files: selectedFiles } = e.target;
-    setFiles({ ...files, [name]: selectedFiles[0] });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      // Files need multipart/form-data, so we build FormData instead of plain JSON
-      const formData = new FormData();
-
-      Object.entries(studentData).forEach(([key, value]) => {
-        if (!fileKeys.includes(key)) {
-          formData.append(key, value);
-        }
-      });
-
-      Object.entries(files).forEach(([key, file]) => {
-        if (file) formData.append(key, file);
-      });
+      const normalizedStudentData = {
+        ...studentData,
+        email: studentData.email.trim().toLowerCase(),
+        aadharNumber: studentData.aadharNumber.trim(),
+      };
 
       const res = await axios.post(
         "http://localhost:5000/api/students",
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        normalizedStudentData
       );
 
       setGeneratedPassword(res.data.generatedPassword);
@@ -229,10 +193,10 @@ const AddStudentForm = ({ onStudentAdded }) => {
       }
 
       setStudentData(initialState);
-      setFiles({});
     } catch (err) {
       console.error(err);
-      alert("Error adding student");
+      const message = err.response?.data?.error || "Error adding student";
+      alert(`❌ ${message}`);
     } finally {
       setSubmitting(false);
     }
@@ -278,19 +242,53 @@ const AddStudentForm = ({ onStudentAdded }) => {
                       </Typography>
                     </Box>
                     <Divider sx={{ mb: 2 }} />
-                    <Grid container spacing={2}>
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "repeat(2, minmax(0, 1fr))",
+                          md: "repeat(3, minmax(0, 1fr))",
+                        },
+                        gap: 2,
+                      }}
+                    >
                       {section.fields.map((field) => (
-                        <Grid item xs={12} sm={6} md={4} key={field.key}>
+                        <Box
+                          key={field.key}
+                          sx={
+                            field.type === "select"
+                              ? { gridColumn: "1 / -1" }
+                              : undefined
+                          }
+                        >
                           {field.type === "select" ? (
                             <TextField
                               select
                               fullWidth
-                              size="small"
+                              size="medium"
                               name={field.key}
                               label={field.label}
                               value={studentData[field.key]}
                               onChange={handleChange}
                               required
+                              InputLabelProps={{ shrink: true }}
+                              sx={{
+                                minWidth: 0,
+                                "& .MuiSelect-select": {
+                                  overflow: "visible",
+                                  textOverflow: "clip",
+                                  whiteSpace: "normal",
+                                  lineHeight: 1.35,
+                                },
+                              }}
+                              SelectProps={{
+                                MenuProps: {
+                                  PaperProps: {
+                                    sx: { minWidth: 300, maxWidth: "90vw" },
+                                  },
+                                },
+                              }}
                             >
                               {field.options.map((opt) => (
                                 <MenuItem key={opt} value={opt}>
@@ -298,17 +296,6 @@ const AddStudentForm = ({ onStudentAdded }) => {
                                 </MenuItem>
                               ))}
                             </TextField>
-                          ) : field.type === "file" ? (
-                            <TextField
-                              fullWidth
-                              size="small"
-                              type="file"
-                              name={field.key}
-                              label={field.label}
-                              onChange={handleFileChange}
-                              InputLabelProps={{ shrink: true }}
-                              required
-                            />
                           ) : (
                             <TextField
                               fullWidth
@@ -324,9 +311,9 @@ const AddStudentForm = ({ onStudentAdded }) => {
                               required
                             />
                           )}
-                        </Grid>
+                        </Box>
                       ))}
-                    </Grid>
+                    </Box>
                   </CardContent>
                 </Card>
               </Grow>

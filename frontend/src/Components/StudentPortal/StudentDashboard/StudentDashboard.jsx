@@ -19,6 +19,7 @@ import StudentAttendanceView from "../Attendance/StudentAttendanceView";
 // apna actual relative path use karein jahan aapne file save ki hai
 import LeaveForm from "../LeaveForm/LeaveForm";
 import StudentNotifications from "../StudentNotification/StudentNotifications";
+import MentalHealthQuiz from "../Quiz/MentalHealthQuiz";
 
 import {
   Box,
@@ -53,6 +54,7 @@ import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import HowToRegRoundedIcon from "@mui/icons-material/HowToRegRounded";
 import PaidRoundedIcon from "@mui/icons-material/PaidRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
+import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 
 const DRAWER_WIDTH = 220;
 
@@ -63,6 +65,7 @@ const NAV_ITEMS = [
   { key: "attendance-subject", label: "Subject-wise Attendance", icon: <EventNoteRoundedIcon /> },
   { key: "leave", label: "Apply For Leave", icon: <EventBusyRoundedIcon /> },
   { key: "notification", label: "Notification", icon: <NotificationsRoundedIcon /> },
+  { key: "quiz", label: "Mental Health Quiz", icon: <QuizRoundedIcon /> },
 ];
 
 const attendanceData = [
@@ -519,6 +522,13 @@ export default function StudentDashboard() {
             <Fade in timeout={400}>
               <Box>
                 <StudentNotifications />
+              </Box>
+            </Fade>
+          )}
+          {activeTab === "quiz" && (
+            <Fade in timeout={400}>
+              <Box>
+                <MentalHealthQuiz onBack={() => setActiveTab("dashboard")} />
               </Box>
             </Fade>
           )}

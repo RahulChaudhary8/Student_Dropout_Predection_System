@@ -66,6 +66,8 @@ import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsAct
 import FiberManualRecordRoundedIcon from "@mui/icons-material/FiberManualRecordRounded";
 import InboxRoundedIcon from "@mui/icons-material/InboxRounded";
 import PsychologyRoundedIcon from "@mui/icons-material/PsychologyRounded";
+import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
+import QuizManagement from "../Quiz/QuizManagement";
 
 const DRAWER_WIDTH = 230;
 
@@ -77,6 +79,7 @@ const NAV_ITEMS = [
   { key: "attendances", label: "Attendances", icon: <EventNoteRoundedIcon /> },
   { key: "test-scores", label: "Test Scores", icon: <AssessmentRoundedIcon /> },
   { key: "notification", label: "Notification", icon: <NotificationsRoundedIcon /> },
+  { key: "quiz-management", label: "Quiz Management", icon: <QuizRoundedIcon /> },
 ];
 
 const MODEL_FEATURES = [
@@ -1247,6 +1250,13 @@ const Dashboard = () => {
             <Fade in timeout={400}>
               <Box>
                 <Notification />
+              </Box>
+            </Fade>
+          )}
+          {activeTab === "quiz-management" && (
+            <Fade in timeout={400}>
+              <Box>
+                <QuizManagement />
               </Box>
             </Fade>
           )}

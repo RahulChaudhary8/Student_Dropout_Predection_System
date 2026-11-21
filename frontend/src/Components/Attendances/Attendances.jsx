@@ -56,6 +56,7 @@ const Attendances = ({ studentData = [], courses = [] }) => {
   );
   const [course, setCourse] = useState("");
   const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   // NOTE: previously this compared against `s.course`, but the course
   // dropdown above is built from `courseApplied` (the actual DB field) —
@@ -78,6 +79,21 @@ const Attendances = ({ studentData = [], courses = [] }) => {
       return;
     }
 
+    if (filteredStudents.length === 0) {
+      setMessage("❌ No students found for the selected subject.");
+      return;
+    }
+
+    const studentsWithoutId = filteredStudents.filter(
+      (student) => !(student.studentId || student.student_id)
+    );
+    if (studentsWithoutId.length > 0) {
+      setMessage("❌ Attendance could not be saved because some students are missing an ID.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
     try {
       const payload = filteredStudents.map((s) => ({
         student_id: s.studentId || s.student_id,
@@ -91,11 +107,13 @@ const Attendances = ({ studentData = [], courses = [] }) => {
         "http://localhost:5000/attendance",
         payload
       );
-      console.log(response.data);
-      setMessage("✅ Attendance saved successfully!");
+      const savedCount = response.data?.data?.length ?? payload.length;
+      setMessage(`✅ Attendance saved successfully for ${savedCount} student${savedCount === 1 ? "" : "s"}.`);
     } catch (error) {
       console.error(error);
-      setMessage("❌ Failed to save attendance.");
+      setMessage(error.response?.data?.message || "❌ Failed to save attendance.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -247,12 +265,13 @@ const Attendances = ({ studentData = [], courses = [] }) => {
                 variant="contained"
                 startIcon={<SaveRoundedIcon />}
                 onClick={saveAttendance}
+                disabled={saving}
                 className="transition-all duration-300"
                 sx={{
                   "&:hover": { transform: "translateY(-2px)", boxShadow: 4 },
                 }}
               >
-                Save Attendance
+                {saving ? "Saving..." : "Save Attendance"}
               </Button>
 
               {message && (

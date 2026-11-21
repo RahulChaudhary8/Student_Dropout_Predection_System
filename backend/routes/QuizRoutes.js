@@ -1,72 +1,213 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import Quiz from "../models/Quiz.js";
-import QuizResponse from "../models/QuizResponse.js";
+import Question from "../models/Question.js";
+import QuizSubmission from "../models/QuizSubmission.js";
+import Student from "../models/Student.js";
+import { verifyToken } from "../middleware/authMiddleware.js";
+import { requireRole } from "../middleware/roleMiddleware.js";
+import { calculateDistance } from "../utils/calculateDistance.js";
 
 const router = express.Router();
+const quizRateLimit = rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false });
 
-// ✅ Create Quiz (Mentor)
-router.post("/create", async (req, res) => {
+router.use(quizRateLimit);
+
+router.post("/create", verifyToken, requireRole("mentor"), async (req, res) => {
   try {
-    const { title, questions, mentorId, expiresAt } = req.body;
-    const quiz = new Quiz({
-      title,
-      questions,
-      createdBy: mentorId,
-      expiresAt,
+    const { title, description, latitude, longitude, allowedRadius, startTime, endTime } = req.body;
+    if (
+      typeof title !== "string" ||
+      !title.trim() ||
+      latitude === undefined ||
+      longitude === undefined ||
+      allowedRadius === undefined ||
+      !startTime ||
+      !endTime
+    ) {
+      return res.status(400).json({ error: "All quiz fields are required" });
+    }
+
+    const quizLatitude = Number(latitude);
+    const quizLongitude = Number(longitude);
+    const radius = Number(allowedRadius);
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (
+      !Number.isFinite(quizLatitude) ||
+      quizLatitude < -90 ||
+      quizLatitude > 90 ||
+      !Number.isFinite(quizLongitude) ||
+      quizLongitude < -180 ||
+      quizLongitude > 180 ||
+      !Number.isFinite(radius) ||
+      radius <= 0
+    ) {
+      return res.status(400).json({ error: "Enter valid coordinates and a positive radius" });
+    }
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      return res.status(400).json({ error: "Invalid quiz time range" });
+    }
+
+    const quiz = await Quiz.create({
+      title: String(title).trim().slice(0, 150),
+      description: String(description || "").trim().slice(0, 1000),
+      latitude: quizLatitude,
+      longitude: quizLongitude,
+      allowedRadius: radius,
+      startTime: start,
+      endTime: end,
+      createdBy: req.user.id,
+      isActive: true,
     });
-    await quiz.save();
-    res.json({ message: "Quiz created", quiz });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(201).json({ message: "Quiz created", quiz });
+  } catch (error) {
+    console.error("Failed to create quiz:", error);
+    if (error?.name === "ValidationError" || error?.name === "CastError") {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to create quiz" });
   }
 });
 
-// ✅ Get all quizzes
-router.get("/", async (req, res) => {
-  try {
-    const quizzes = await Quiz.find();
-    res.json(quizzes);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+router.get("/active", verifyToken, requireRole("student"), async (req, res) => {
+  const now = new Date();
+  const quiz = await Quiz.findOne({ isActive: true, startTime: { $lte: now }, endTime: { $gte: now } }).sort({ startTime: -1 });
+  if (!quiz) return res.status(404).json({ error: "No active quiz available" });
+  res.json({ quiz });
 });
 
-// ✅ Submit Quiz (Student)
-router.post("/submit/:quizId", async (req, res) => {
+router.get("/check-attempt", verifyToken, requireRole("student"), async (req, res) => {
+  const quiz = await Quiz.findOne({ isActive: true, startTime: { $lte: new Date() }, endTime: { $gte: new Date() } }).sort({ startTime: -1 });
+  if (!quiz) return res.status(404).json({ submitted: false, error: "No active quiz available" });
+  const existing = await QuizSubmission.findOne({ quizId: quiz._id, studentId: req.user.id });
+  res.json({ submitted: Boolean(existing), quizId: quiz._id });
+});
+
+router.post("/submit", verifyToken, requireRole("student"), async (req, res) => {
   try {
-    const { studentId, answers } = req.body;
-    const quiz = await Quiz.findById(req.params.quizId);
+    const { quizId, latitude, longitude, answers } = req.body;
+    const now = new Date();
 
-    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    const quiz = await Quiz.findOne({ _id: quizId, isActive: true, startTime: { $lte: now }, endTime: { $gte: now } });
+    if (!quiz) return res.status(400).json({ error: "Quiz is not active or has expired" });
 
-    let score = 0;
-    quiz.questions.forEach((q, i) => {
-      if (q.correctAnswer === answers[i]) score++;
-    });
+    const studentLatitude = Number(latitude);
+    const studentLongitude = Number(longitude);
+    if (!Number.isFinite(studentLatitude) || !Number.isFinite(studentLongitude)) {
+      return res.status(400).json({ error: "Valid student location is required" });
+    }
 
-    const response = new QuizResponse({
+    const distance = calculateDistance(studentLatitude, studentLongitude, quiz.latitude, quiz.longitude);
+    if (distance > quiz.allowedRadius) {
+      return res.status(403).json({ error: "You are outside the permitted quiz area." });
+    }
+
+    const alreadySubmitted = await QuizSubmission.findOne({ quizId: quiz._id, studentId: req.user.id });
+    if (alreadySubmitted) return res.status(409).json({ error: "You have already submitted this quiz." });
+
+    if (!Array.isArray(answers) || answers.length !== 10) {
+      return res.status(400).json({ error: "Exactly 10 answers are required" });
+    }
+
+    const normalizedAnswers = answers.map((answer) => ({
+      questionId: answer.questionId,
+      selectedOption: String(answer.selectedOption).toUpperCase(),
+    }));
+
+    if (normalizedAnswers.some((answer) => !["A", "B", "C", "D"].includes(answer.selectedOption))) {
+      return res.status(400).json({ error: "Invalid selected option" });
+    }
+
+    const questionIds = normalizedAnswers.map((answer) => answer.questionId);
+    const validQuestions = await Question.countDocuments({ _id: { $in: questionIds } });
+    if (validQuestions !== 10 || new Set(questionIds.map(String)).size !== 10) {
+      return res.status(400).json({ error: "Invalid quiz answers" });
+    }
+
+    const student = await Student.findById(req.user.id).select("fullName email");
+    if (!student) return res.status(404).json({ error: "Student not found" });
+
+    await QuizSubmission.create({
       quizId: quiz._id,
-      studentId,
-      answers,
-      score,
+      studentId: student._id,
+      studentName: student.fullName,
+      email: student.email,
+      answers: normalizedAnswers,
+      latitude: studentLatitude,
+      longitude: studentLongitude,
+      distanceFromCenter: Math.round(distance),
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") || "",
+      submittedAt: now,
+      status: "completed",
     });
 
-    await response.save();
-
-    res.json({ message: "Submitted", score });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(201).json({ message: "Quiz Submitted Successfully", success: true });
+  } catch (error) {
+    if (error?.code === 11000) return res.status(409).json({ error: "You have already submitted this quiz." });
+    res.status(400).json({ error: error.message });
   }
 });
 
-// ✅ Get Quiz Responses (Mentor)
-router.get("/responses/:quizId", async (req, res) => {
-  try {
-    const responses = await QuizResponse.find({ quizId: req.params.quizId });
-    res.json(responses);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+router.get("/mentor", verifyToken, requireRole("mentor"), async (req, res) => {
+  const quizzes = await Quiz.find({ createdBy: req.user.id }).sort({ createdAt: -1 });
+  res.json({ quizzes });
+});
+
+router.get("/mentor/submissions", verifyToken, requireRole("mentor"), async (req, res) => {
+  const ownedQuizIds = await Quiz.distinct("_id", { createdBy: req.user.id });
+  const submissions = await QuizSubmission.find({ quizId: { $in: ownedQuizIds } })
+    .populate("quizId", "title")
+    .sort({ submittedAt: -1 });
+  res.json({ submissions });
+});
+
+router.get("/mentor/submission/:id", verifyToken, requireRole("mentor"), async (req, res) => {
+  const submission = await QuizSubmission.findById(req.params.id)
+    .populate("quizId", "title description latitude longitude allowedRadius createdBy")
+    .populate("answers.questionId", "questionText optionA optionB optionC optionD category");
+  if (!submission) return res.status(404).json({ error: "Submission not found" });
+  if (String(submission.quizId?.createdBy) !== String(req.user.id)) {
+    return res.status(403).json({ error: "You cannot access this submission" });
   }
+  res.json({ submission });
+});
+
+const getRandomQuestions = async (req, res) => {
+  const count = Math.min(Math.max(Number(req.query.count) || 10, 1), 50);
+  const questions = await Question.aggregate([{ $sample: { size: count } }]);
+  res.json({ questions: questions.map((q) => ({
+    _id: q._id,
+    questionText: q.questionText,
+    optionA: q.optionA,
+    optionB: q.optionB,
+    optionC: q.optionC,
+    optionD: q.optionD,
+  })) });
+};
+
+router.get("/questions/random", verifyToken, requireRole("student"), getRandomQuestions);
+router.get("/random", verifyToken, requireRole("student"), getRandomQuestions);
+
+router.get("/submissions", verifyToken, requireRole("mentor"), async (req, res) => {
+  const ownedQuizIds = await Quiz.distinct("_id", { createdBy: req.user.id });
+  const submissions = await QuizSubmission.find({ quizId: { $in: ownedQuizIds } })
+    .populate("quizId", "title")
+    .sort({ submittedAt: -1 });
+  res.json({ submissions });
+});
+
+router.get("/submission/:id", verifyToken, requireRole("mentor"), async (req, res) => {
+  const submission = await QuizSubmission.findById(req.params.id)
+    .populate("quizId", "title description latitude longitude allowedRadius createdBy")
+    .populate("answers.questionId", "questionText optionA optionB optionC optionD category");
+  if (!submission) return res.status(404).json({ error: "Submission not found" });
+  if (String(submission.quizId?.createdBy) !== String(req.user.id)) {
+    return res.status(403).json({ error: "You cannot access this submission" });
+  }
+  res.json({ submission });
 });
 
 export default router;

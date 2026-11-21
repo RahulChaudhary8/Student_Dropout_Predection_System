@@ -1,5 +1,4 @@
 import express from "express";
-import multer from "multer";
 import Student from "../models/Student.js";
 import Mentor from "../models/Mentor.js";
 import bcrypt from "bcryptjs";
@@ -21,36 +20,22 @@ ensureCounterSeeded().catch((err) =>
 // Round-robin counters for each specialization
 let mentorCounters = {}; // { "Math": 0, "Physics": 1, ... }
 
-// ===== Multer setup for file uploads (photo, signature, documents) =====
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/"); // make sure this folder exists in backend root
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, `${file.fieldname}-${uniqueSuffix}-${file.originalname}`);
-  },
-});
-
-const upload = multer({ storage });
-
-// Names must match the `name` attributes used in the frontend form
-const studentFileFields = upload.fields([
-  { name: "photo", maxCount: 1 },
-  { name: "signature", maxCount: 1 },
-  { name: "marksheet10th", maxCount: 1 },
-  { name: "marksheet12th", maxCount: 1 },
-  { name: "transferCertificate", maxCount: 1 },
-  { name: "migrationCertificate", maxCount: 1 },
-  { name: "casteCertificate", maxCount: 1 },
-  { name: "incomeCertificate", maxCount: 1 },
-]);
-
 // POST - Add Student + Assign Mentor
-router.post("/", studentFileFields, async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     if (!req.body || !req.body.courseApplied) {
       return res.status(400).json({ error: "❌ courseApplied is required" });
+    }
+
+    if (req.body.email) {
+      req.body.email = String(req.body.email).trim().toLowerCase();
+      const existingStudent = await Student.findOne({ email: req.body.email });
+      if (existingStudent) {
+        return res.status(409).json({
+          error: "A student with this email already exists",
+          field: "email",
+        });
+      }
     }
 
     // The form never legitimately carries a Student ID or password —
@@ -85,21 +70,12 @@ router.post("/", studentFileFields, async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(identity.plainPassword, 10);
 
-    // Uploaded file paths (from multer) — undefined if that file wasn't sent
-    const filePaths = {};
-    if (req.files) {
-      Object.keys(req.files).forEach((fieldName) => {
-        filePaths[fieldName] = req.files[fieldName][0].path;
-      });
-    }
-
     // Note: studentId/password/plainPassword are set AFTER the ...req.body
     // spread on purpose, so even if the client form somehow submitted
     // those field names, they're always overridden by the system-assigned
     // values below — never trusted from the client.
     const newStudent = new Student({
       ...req.body,
-      ...filePaths,
       studentId: identity.studentId,
       password: hashedPassword, // store hashed password
       plainPassword: identity.plainPassword,
@@ -113,13 +89,31 @@ router.post("/", studentFileFields, async (req, res) => {
         ? "✅ Student added successfully"
         : `✅ Student added successfully, but ⚠️ no mentor found for course: ${studentCourse}. Please assign one manually.`,
       student: newStudent,
-      generatedPassword: randomPassword,
+      generatedPassword: identity.plainPassword,
       assignedMentor: assignedMentor
         ? `${assignedMentor.firstName} ${assignedMentor.lastName}`
         : null,
     });
   } catch (error) {
     console.error(error);
+
+    if (error?.code === 11000) {
+      const duplicateField = error.keyPattern ? Object.keys(error.keyPattern)[0] : "field";
+      return res.status(409).json({
+        error: duplicateField === "email"
+          ? "A student with this email already exists"
+          : `A student with this ${duplicateField} already exists`,
+        field: duplicateField,
+      });
+    }
+
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({
+        error: "Please check all required fields",
+        details: error.message,
+      });
+    }
+
     res.status(500).json({ error: "❌ Failed to save student" });
   }
 });
