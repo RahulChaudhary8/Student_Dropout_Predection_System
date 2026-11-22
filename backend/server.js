@@ -20,6 +20,7 @@ import notesRouter from "./routes/notes.js";
 import leaveRoutes from "./routes/leaveRoutes.js";
 
 import classRoutes from "./routes/classRoutes.js";
+import academicRoutes from "./routes/academicRoutes.js";
 
 
 dotenv.config();
@@ -47,6 +48,7 @@ app.use("/api/mentor", quizRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/notes", notesRouter);
 app.use("/api/classes", classRoutes);
+app.use("/api/academics", academicRoutes);
 
 
 // MongoDB connection with FrontendDb

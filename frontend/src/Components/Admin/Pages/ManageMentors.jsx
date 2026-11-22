@@ -52,6 +52,7 @@ export default function ManageMentors() {
       active: mentor.active || true,
       password: mentor.password,
       assignedClasses: mentor.assignedClasses || [],
+      subjectAssignments: mentor.subjectAssignments || [],
     };
     setMentors((prev) => [...prev, formatted]);
     setActiveSection("table");
@@ -121,6 +122,7 @@ export default function ManageMentors() {
           password: mentor.password,
           plainPassword: mentor.plainPassword,
           assignedClasses: mentor.assignedClasses || [],
+          subjectAssignments: mentor.subjectAssignments || [],
         }));
         setMentors(formattedData);
       } catch (err) {
@@ -295,6 +297,9 @@ export default function ManageMentors() {
                               Assigned Classes
                             </TableCell>
                             <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>
+                              Assigned Subjects
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>
                               Status
                             </TableCell>
                             <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }} align="right">
@@ -329,6 +334,29 @@ export default function ManageMentors() {
                                         size="small"
                                       />
                                     ))
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                      Not assigned
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Box className="flex flex-wrap gap-1" sx={{ maxWidth: 320 }}>
+                                  {mentor.subjectAssignments?.length > 0 ? (
+                                    mentor.subjectAssignments.map((assignment, index) => {
+                                      const courseName =
+                                        typeof assignment.courseId === "object"
+                                          ? assignment.courseId?.name
+                                          : "";
+                                      return (
+                                        <Chip
+                                          key={`${courseName}-${assignment.branch}-${index}`}
+                                          label={`${courseName || "Course"} - ${assignment.branch}: ${assignment.subjects.join(", ")}`}
+                                          size="small"
+                                        />
+                                      );
+                                    })
                                   ) : (
                                     <Typography variant="body2" color="text.secondary">
                                       Not assigned

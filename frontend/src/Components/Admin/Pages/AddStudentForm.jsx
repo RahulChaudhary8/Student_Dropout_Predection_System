@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import {
+  Alert,
   Box,
   Typography,
   Card,
@@ -167,9 +168,32 @@ const AddStudentForm = ({ onStudentAdded }) => {
   const [studentData, setStudentData] = useState(initialState);
   const [generatedPassword, setGeneratedPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [academicPrograms, setAcademicPrograms] = useState([]);
+  const [academicCatalogError, setAcademicCatalogError] = useState("");
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch("http://localhost:5000/api/academics", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not load course catalog");
+        setAcademicPrograms(data);
+      })
+      .catch((error) => {
+        console.error("Failed to load academic catalog:", error);
+        setAcademicCatalogError("Course catalog could not be loaded. You can still enter course and branch manually.");
+      });
+  }, []);
 
   const handleChange = (e) => {
-    setStudentData({ ...studentData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setStudentData((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === "courseApplied" ? { branchSpecialization: "" } : {}),
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -219,6 +243,10 @@ const AddStudentForm = ({ onStudentAdded }) => {
           </Typography>
         </Box>
 
+        {academicCatalogError && (
+          <Alert severity="warning" sx={{ mb: 2 }}>{academicCatalogError}</Alert>
+        )}
+
         {generatedPassword && (
           <Fade in timeout={300}>
             <Chip
@@ -260,16 +288,53 @@ const AddStudentForm = ({ onStudentAdded }) => {
                         gap: 2,
                       }}
                     >
-                      {section.fields.map((field) => (
+                      {section.fields.map((field) => {
+                        const selectedProgram = academicPrograms.find(
+                          (program) =>
+                            program.name.toLowerCase() ===
+                            studentData.courseApplied.trim().toLowerCase()
+                        );
+                        const isCourseField = field.key === "courseApplied" && academicPrograms.length > 0;
+                        const isBranchField =
+                          field.key === "branchSpecialization" &&
+                          (selectedProgram?.branches.length || 0) > 0;
+                        const academicOptions = isCourseField
+                          ? academicPrograms.map((program) => program.name)
+                          : isBranchField
+                            ? selectedProgram.branches.map((branch) => branch.name)
+                            : [];
+                        const isAcademicSelect = isCourseField || isBranchField;
+
+                        return (
                         <Box
                           key={field.key}
                           sx={
-                            field.type === "select"
+                            field.type === "select" || isAcademicSelect
                               ? { gridColumn: "1 / -1" }
                               : undefined
                           }
                         >
-                          {field.type === "select" ? (
+                          {isAcademicSelect ? (
+                            <TextField
+                              select
+                              fullWidth
+                              size="medium"
+                              name={field.key}
+                              label={field.label}
+                              value={studentData[field.key]}
+                              onChange={handleChange}
+                              required={requiredFields.has(field.key)}
+                              InputLabelProps={{ shrink: true }}
+                              SelectProps={{ native: true }}
+                            >
+                              <option value="">
+                                {isCourseField ? "Select a course" : "Not provided"}
+                              </option>
+                              {academicOptions.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                              ))}
+                            </TextField>
+                          ) : field.type === "select" ? (
                             <TextField
                               select
                               fullWidth
@@ -319,7 +384,8 @@ const AddStudentForm = ({ onStudentAdded }) => {
                             />
                           )}
                         </Box>
-                      ))}
+                      );
+                      })}
                     </Box>
                   </CardContent>
                 </Card>

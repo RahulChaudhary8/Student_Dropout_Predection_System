@@ -146,6 +146,8 @@ export default function ManageStudents({ isActiveTab }) {
   const [editingStudent, setEditingStudent] = useState(null);
   const [studentDraft, setStudentDraft] = useState({});
   const [studentSaving, setStudentSaving] = useState(false);
+  const [academicPrograms, setAcademicPrograms] = useState([]);
+  const [academicCatalogError, setAcademicCatalogError] = useState("");
 
   const fetchStudents = async () => {
     try {
@@ -162,6 +164,15 @@ export default function ManageStudents({ isActiveTab }) {
       .get("http://localhost:5000/api/mentors")
       .then((res) => setMentors(res.data))
       .catch((err) => console.error("Failed to fetch mentors", err));
+    axios
+      .get("http://localhost:5000/api/academics", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      })
+      .then((res) => setAcademicPrograms(res.data))
+      .catch((err) => {
+        console.error("Failed to fetch academic catalog", err);
+        setAcademicCatalogError("Course catalog unavailable; course and branch can still be entered manually.");
+      });
   }, []);
 
   useEffect(() => {
@@ -420,38 +431,69 @@ export default function ManageStudents({ isActiveTab }) {
   };
 
   const renderStudentFields = (values, setValues) => (
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
-      {STUDENT_FIELDS.map((field) => (
-        <TextField
-          key={field.key}
-          select={field.type === "select"}
-          type={field.type === "select" ? "text" : field.type}
-          fullWidth
-          label={field.label}
-          required={REQUIRED_STUDENT_COLUMNS.some((required) => required.field === field.key)}
-          value={values[field.key] ?? ""}
-          onChange={(event) =>
-            setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
-          }
-          size="small"
-          InputLabelProps={field.type === "date" ? { shrink: true } : undefined}
-          SelectProps={
-            field.type === "select"
-              ? { native: true }
-              : undefined
-          }
-        >
-          {field.type === "select" && (
-            <>
-              <option value="">Not provided</option>
-              {field.options.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </>
-          )}
-        </TextField>
-      ))}
-    </Box>
+    <>
+      {academicCatalogError && (
+        <Alert severity="warning" sx={{ mb: 2 }}>{academicCatalogError}</Alert>
+      )}
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+        {STUDENT_FIELDS.map((field) => {
+          const selectedProgram = academicPrograms.find(
+            (program) =>
+              program.name.toLowerCase() ===
+              String(values.courseApplied || "").trim().toLowerCase()
+          );
+          const isCourseField = field.key === "courseApplied" && academicPrograms.length > 0;
+          const isBranchField =
+            field.key === "branchSpecialization" &&
+            (selectedProgram?.branches.length || 0) > 0;
+          const isAcademicSelect = isCourseField || isBranchField;
+          const options = isCourseField
+            ? academicPrograms.map((program) => program.name)
+            : isBranchField
+              ? selectedProgram.branches.map((branch) => branch.name)
+              : field.options || [];
+          const currentValue = values[field.key] ?? "";
+          const fieldOptions =
+            isAcademicSelect && currentValue && !options.includes(currentValue)
+              ? [currentValue, ...options]
+              : options;
+          const isSelect = field.type === "select" || isAcademicSelect;
+
+          return (
+            <TextField
+              key={field.key}
+              select={isSelect}
+              type={isSelect ? "text" : field.type}
+              fullWidth
+              label={field.label}
+              required={REQUIRED_STUDENT_COLUMNS.some((required) => required.field === field.key)}
+              value={currentValue}
+              onChange={(event) =>
+                setValues((previous) => ({
+                  ...previous,
+                  [field.key]: event.target.value,
+                  ...(field.key === "courseApplied" ? { branchSpecialization: "" } : {}),
+                }))
+              }
+              size="small"
+              InputLabelProps={field.type === "date" || isAcademicSelect ? { shrink: true } : undefined}
+              SelectProps={isSelect ? { native: true } : undefined}
+            >
+              {isSelect && (
+                <>
+                  <option value="">
+                    {isCourseField ? "Select a course" : "Not provided"}
+                  </option>
+                  {fieldOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </>
+              )}
+            </TextField>
+          );
+        })}
+      </Box>
+    </>
   );
 
   const assignOldMentors = async () => {
@@ -639,6 +681,7 @@ export default function ManageStudents({ isActiveTab }) {
                             <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>ID</TableCell>
                             <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>Name</TableCell>
                             <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>Course</TableCell>
+                            <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>Branch</TableCell>
                             <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>Year</TableCell>
                             <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>Email</TableCell>
                             <TableCell sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>Password</TableCell>
@@ -667,6 +710,7 @@ export default function ManageStudents({ isActiveTab }) {
                               <TableCell>{student.studentId}</TableCell>
                               <TableCell>{student.fullName}</TableCell>
                               <TableCell>{student.courseApplied}</TableCell>
+                              <TableCell>{student.branchSpecialization || "—"}</TableCell>
                               <TableCell>{student.yearOfAddmission}</TableCell>
                               <TableCell>{student.email}</TableCell>
                               <TableCell>{student.plainPassword}</TableCell>

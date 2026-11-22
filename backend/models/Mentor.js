@@ -23,6 +23,17 @@ const mentorSchema = new mongoose.Schema({
       default: [],
     },
   ],
+  subjectAssignments: [
+    {
+      courseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "AcademicProgram",
+        required: true,
+      },
+      branch: { type: String, required: true, trim: true },
+      subjects: { type: [String], default: [] },
+    },
+  ],
 }, { timestamps: true });
 
 const Mentor = mongoose.model("Mentor", mentorSchema);
