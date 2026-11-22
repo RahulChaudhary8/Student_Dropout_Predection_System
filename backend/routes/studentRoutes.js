@@ -126,29 +126,25 @@ router.post("/bulk-upload", async (req, res) => {
     return res.status(400).json({ error: "A non-empty students array is required" });
   }
 
-  const requiredFields = [
-    "fullName",
+  const requiredFields = ["fullName", "email", "courseApplied"];
+  const allowedFields = [
+    ...requiredFields,
     "dateOfBirth",
     "gender",
     "fathersName",
     "mothersName",
     "category",
     "aadharNumber",
-    "email",
     "phoneNumber",
     "permanentAddress",
     "currentAddress",
     "parentContactNumber",
     "parentEmergencyNumber",
-    "courseApplied",
     "previousQualification",
     "boardUniversityName",
     "yearOfAddmission",
     "yearOfPassing",
     "nationality",
-  ];
-  const allowedFields = [
-    ...requiredFields,
     "bloodGroup",
     "branchSpecialization",
     "entranceExamScore",
@@ -190,6 +186,31 @@ router.post("/bulk-upload", async (req, res) => {
       }
 
       studentData.email = String(studentData.email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentData.email)) {
+        throw new Error("Email is invalid");
+      }
+
+      const enumValues = {
+        gender: ["Male", "Female", "Other"],
+        category: ["General", "OBC", "SC", "ST", "EWS"],
+        bloodGroup: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
+        previousQualification: ["10th", "12th", "Diploma"],
+        feeStructure: ["Semester-wise", "Yearly", "One-time"],
+        scholarshipApplicable: ["Yes", "No"],
+        paymentMode: ["Online", "Cash", "Cheque", "DD"],
+        hostelRequired: ["Yes", "No"],
+        transportRequired: ["Yes", "No"],
+      };
+      for (const [field, values] of Object.entries(enumValues)) {
+        if (studentData[field] !== undefined && !values.includes(studentData[field])) {
+          throw new Error(`${field} must be one of: ${values.join(", ")}`);
+        }
+      }
+
+      if (studentData.aadharNumber !== undefined && !/^\d{12}$/.test(studentData.aadharNumber)) {
+        throw new Error("Aadhar Number must contain exactly 12 digits");
+      }
+
       if (seenEmails.has(studentData.email)) {
         throw new Error("Duplicate email in uploaded file");
       }
@@ -338,6 +359,81 @@ router.put("/bulk-update", async (req, res) => {
   } catch (error) {
     console.error("Bulk student update error:", error);
     res.status(500).json({ error: "Failed to update selected students" });
+  }
+});
+
+// PUT - Update editable student profile fields
+router.put("/:id", async (req, res) => {
+  try {
+    const editableFields = [
+      "fullName",
+      "dateOfBirth",
+      "gender",
+      "fathersName",
+      "mothersName",
+      "bloodGroup",
+      "category",
+      "aadharNumber",
+      "email",
+      "phoneNumber",
+      "permanentAddress",
+      "currentAddress",
+      "parentContactNumber",
+      "parentEmergencyNumber",
+      "courseApplied",
+      "branchSpecialization",
+      "previousQualification",
+      "boardUniversityName",
+      "yearOfAddmission",
+      "yearOfPassing",
+      "entranceExamScore",
+      "fatherOccupation",
+      "motherOccupation",
+      "annualFamilyIncome",
+      "totalCourseFees",
+      "feeStructure",
+      "scholarshipApplicable",
+      "paymentMode",
+      "nationality",
+      "religion",
+      "hostelRequired",
+      "transportRequired",
+    ];
+    const updates = {};
+
+    for (const field of editableFields) {
+      if (!Object.prototype.hasOwnProperty.call(req.body, field)) continue;
+      const value = req.body[field];
+      updates[field] = value === "" ? null : typeof value === "string" ? value.trim() : value;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "No editable student fields provided" });
+    }
+
+    if (updates.email) {
+      updates.email = updates.email.toLowerCase();
+      const duplicate = await Student.findOne({ email: updates.email, _id: { $ne: req.params.id } });
+      if (duplicate) {
+        return res.status(409).json({ error: "A student with this email already exists" });
+      }
+    }
+
+    const student = await Student.findById(req.params.id);
+    if (!student) return res.status(404).json({ error: "Student not found" });
+    student.set(updates);
+    await student.save();
+
+    res.json({ message: "Student updated successfully", student });
+  } catch (error) {
+    console.error("Student update error:", error);
+    if (error?.code === 11000) {
+      return res.status(409).json({ error: "A student with this email already exists" });
+    }
+    if (error?.name === "ValidationError" || error?.name === "CastError") {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: "Failed to update student" });
   }
 });
 

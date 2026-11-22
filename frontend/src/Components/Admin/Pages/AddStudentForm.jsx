@@ -161,6 +161,8 @@ sections.forEach((section) => {
   });
 });
 
+const requiredFields = new Set(["fullName", "email", "courseApplied"]);
+
 const AddStudentForm = ({ onStudentAdded }) => {
   const [studentData, setStudentData] = useState(initialState);
   const [generatedPassword, setGeneratedPassword] = useState("");
@@ -174,11 +176,16 @@ const AddStudentForm = ({ onStudentAdded }) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const normalizedStudentData = {
-        ...studentData,
-        email: studentData.email.trim().toLowerCase(),
-        aadharNumber: studentData.aadharNumber.trim(),
-      };
+      const normalizedStudentData = Object.fromEntries(
+        Object.entries(studentData)
+          .filter(([key, value]) => requiredFields.has(key) || value !== "")
+          .map(([key, value]) => [
+            key,
+            key === "email" || key === "aadharNumber"
+              ? value.trim().toLowerCase()
+              : value,
+          ])
+      );
 
       const res = await axios.post(
         "http://localhost:5000/api/students",
@@ -271,7 +278,7 @@ const AddStudentForm = ({ onStudentAdded }) => {
                               label={field.label}
                               value={studentData[field.key]}
                               onChange={handleChange}
-                              required
+                              required={requiredFields.has(field.key)}
                               InputLabelProps={{ shrink: true }}
                               sx={{
                                 minWidth: 0,
@@ -308,7 +315,7 @@ const AddStudentForm = ({ onStudentAdded }) => {
                               InputLabelProps={
                                 field.type === "date" ? { shrink: true } : undefined
                               }
-                              required
+                              required={requiredFields.has(field.key)}
                             />
                           )}
                         </Box>

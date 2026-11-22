@@ -7,10 +7,10 @@ const studentSchema = new mongoose.Schema(
 
     // ---- Basic Information ----
     fullName: { type: String, required: true },
-    dateOfBirth: { type: String, required: true },
-    gender: { type: String, enum: ["Male", "Female", "Other"], required: true },
-    fathersName: { type: String, required: true },
-    mothersName: { type: String, required: true },
+    dateOfBirth: { type: String },
+    gender: { type: String, enum: ["Male", "Female", "Other"] },
+    fathersName: { type: String },
+    mothersName: { type: String },
     bloodGroup: {
       type: String,
       enum: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"],
@@ -18,17 +18,16 @@ const studentSchema = new mongoose.Schema(
     category: {
       type: String,
       enum: ["General", "OBC", "SC", "ST", "EWS"],
-      required: true,
     },
-    aadharNumber: { type: String, required: true, match: /^[0-9]{12}$/ },
+    aadharNumber: { type: String, match: /^[0-9]{12}$/ },
 
     // ---- Contact Information ----
     email: { type: String, required: true, unique: true },
-    phoneNumber: { type: String, required: true },
-    permanentAddress: { type: String, required: true },
-    currentAddress: { type: String, required: true },
-    parentContactNumber: { type: String, required: true },
-    parentEmergencyNumber: { type: String, required: true },
+    phoneNumber: { type: String },
+    permanentAddress: { type: String },
+    currentAddress: { type: String },
+    parentContactNumber: { type: String },
+    parentEmergencyNumber: { type: String },
 
     // ---- Academic Information ----
     courseApplied: { type: String, required: true },
@@ -36,11 +35,10 @@ const studentSchema = new mongoose.Schema(
     previousQualification: {
       type: String,
       enum: ["10th", "12th", "Diploma"],
-      required: true,
     },
-    boardUniversityName: { type: String, required: true },
-    yearOfAddmission: { type: Number, required: true },
-    yearOfPassing: { type: Number, required: true },
+    boardUniversityName: { type: String },
+    yearOfAddmission: { type: Number },
+    yearOfPassing: { type: Number },
     entranceExamScore: { type: String },
 
     // ---- Family Background ----
@@ -71,7 +69,7 @@ const studentSchema = new mongoose.Schema(
     },
 
     // ---- Other ----
-    nationality: { type: String, required: true },
+    nationality: { type: String },
     religion: { type: String },
     hostelRequired: { type: String, enum: ["Yes", "No"], default: "No" },
     transportRequired: { type: String, enum: ["Yes", "No"], default: "No" },

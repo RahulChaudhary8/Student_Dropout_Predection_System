@@ -78,25 +78,55 @@ const STUDENT_COLUMN_ALIASES = {
 
 const REQUIRED_STUDENT_COLUMNS = [
   { field: "fullName", label: "Full Name" },
-  { field: "dateOfBirth", label: "Date of Birth" },
-  { field: "gender", label: "Gender" },
-  { field: "fathersName", label: "Father's Name" },
-  { field: "mothersName", label: "Mother's Name" },
-  { field: "category", label: "Category" },
-  { field: "aadharNumber", label: "Aadhar Number" },
   { field: "email", label: "Email" },
-  { field: "phoneNumber", label: "Phone Number" },
-  { field: "permanentAddress", label: "Permanent Address" },
-  { field: "currentAddress", label: "Current Address" },
-  { field: "parentContactNumber", label: "Parent Contact Number" },
-  { field: "parentEmergencyNumber", label: "Parent Emergency Number" },
-  { field: "courseApplied", label: "Course / Program Applied For" },
-  { field: "previousQualification", label: "Previous Qualification" },
-  { field: "boardUniversityName", label: "Board / University Name" },
-  { field: "yearOfAddmission", label: "Year of Admission" },
-  { field: "yearOfPassing", label: "Year of Passing" },
-  { field: "nationality", label: "Nationality" },
+  { field: "courseApplied", label: "Course" },
 ];
+
+const STUDENT_FIELDS = [
+  { key: "fullName", label: "Full Name", type: "text" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "courseApplied", label: "Course", type: "text" },
+  { key: "dateOfBirth", label: "Date of Birth", type: "date" },
+  { key: "gender", label: "Gender", type: "select", options: ["Male", "Female", "Other"] },
+  { key: "fathersName", label: "Father's Name", type: "text" },
+  { key: "mothersName", label: "Mother's Name", type: "text" },
+  { key: "bloodGroup", label: "Blood Group", type: "select", options: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"] },
+  { key: "category", label: "Category", type: "select", options: ["General", "OBC", "SC", "ST", "EWS"] },
+  { key: "aadharNumber", label: "Aadhar Number", type: "text" },
+  { key: "phoneNumber", label: "Phone Number", type: "text" },
+  { key: "permanentAddress", label: "Permanent Address", type: "text" },
+  { key: "currentAddress", label: "Current Address", type: "text" },
+  { key: "parentContactNumber", label: "Parent Contact Number", type: "text" },
+  { key: "parentEmergencyNumber", label: "Parent Emergency Number", type: "text" },
+  { key: "branchSpecialization", label: "Branch / Specialization", type: "text" },
+  { key: "previousQualification", label: "Previous Qualification", type: "select", options: ["10th", "12th", "Diploma"] },
+  { key: "boardUniversityName", label: "Board / University Name", type: "text" },
+  { key: "yearOfAddmission", label: "Year of Admission", type: "number" },
+  { key: "yearOfPassing", label: "Year of Passing", type: "number" },
+  { key: "entranceExamScore", label: "Entrance Exam Score", type: "text" },
+  { key: "fatherOccupation", label: "Father's Occupation", type: "text" },
+  { key: "motherOccupation", label: "Mother's Occupation", type: "text" },
+  { key: "annualFamilyIncome", label: "Annual Family Income", type: "number" },
+  { key: "totalCourseFees", label: "Total Course Fees", type: "number" },
+  { key: "feeStructure", label: "Fee Structure", type: "select", options: ["Semester-wise", "Yearly", "One-time"] },
+  { key: "scholarshipApplicable", label: "Scholarship Applicable", type: "select", options: ["Yes", "No"] },
+  { key: "paymentMode", label: "Payment Mode", type: "select", options: ["Online", "Cash", "Cheque", "DD"] },
+  { key: "nationality", label: "Nationality", type: "text" },
+  { key: "religion", label: "Religion", type: "text" },
+  { key: "hostelRequired", label: "Hostel Required", type: "select", options: ["Yes", "No"] },
+  { key: "transportRequired", label: "Transport Required", type: "select", options: ["Yes", "No"] },
+];
+
+const normalizeAadhar = (value) => {
+  const text = String(value ?? "").trim();
+  if (text === "0") return "";
+  if (/^\d{12}$/.test(text)) return text;
+  if (/^[+-]?\d+(?:\.\d+)?e[+-]?\d+$/i.test(text)) {
+    const number = Number(text);
+    if (Number.isSafeInteger(number)) return String(number);
+  }
+  return text;
+};
 
 export default function ManageStudents({ isActiveTab }) {
   const [activeSection, setActiveSection] = useState("table");
@@ -108,6 +138,14 @@ export default function ManageStudents({ isActiveTab }) {
   const [bulkUpdates, setBulkUpdates] = useState({});
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [uploadPreviewOpen, setUploadPreviewOpen] = useState(false);
+  const [pendingUploadRows, setPendingUploadRows] = useState([]);
+  const [editingUploadIndex, setEditingUploadIndex] = useState(null);
+  const [uploadDraft, setUploadDraft] = useState({});
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [studentDraft, setStudentDraft] = useState({});
+  const [studentSaving, setStudentSaving] = useState(false);
 
   const fetchStudents = async () => {
     try {
@@ -252,54 +290,169 @@ export default function ManageStudents({ isActiveTab }) {
           const matchingHeader = aliases.map((alias) => headerMap.get(alias)).find(Boolean);
           if (matchingHeader) student[field] = sourceRow[matchingHeader];
         });
+        if (student.aadharNumber) {
+          student.aadharNumber = normalizeAadhar(student.aadharNumber);
+        }
+        if (student.email) student.email = String(student.email).trim().toLowerCase();
         return student;
       });
 
-      const invalidRows = studentsToUpload
-        .map((student, index) => {
-          const missing = REQUIRED_STUDENT_COLUMNS
-            .filter(({ field }) => String(student[field] ?? "").trim() === "")
-            .map(({ label }) => label);
-          return missing.length > 0 ? `Row ${index + 2}: ${missing.join(", ")}` : null;
-        })
-        .filter(Boolean);
-
-      if (invalidRows.length > 0) {
-        alert(
-          `Upload nahi hua. Required fields har row mein bharein:\n${invalidRows.slice(0, 5).join("\n")}` +
-          (invalidRows.length > 5 ? `\n...and ${invalidRows.length - 5} more row(s)` : "")
-        );
-        return;
-      }
-
-      if (!window.confirm(`${studentsToUpload.length} complete student record(s) upload karein?`)) {
-        return;
-      }
-
-      const res = await axios.post("http://localhost:5000/api/students/bulk-upload", {
-        students: studentsToUpload,
-      });
-      await fetchStudents();
-      setSelectedIds([]);
-
-      const failures = (res.data.errors || [])
-        .slice(0, 5)
-        .map((item) => `Row ${item.row}: ${item.error}`);
-      alert(
-        `✅ ${res.data.created} student(s) database mein save hue.` +
-        (res.data.failed > 0
-          ? `\n❌ ${res.data.failed} row(s) save nahi hue:\n${failures.join("\n")}` +
-            (res.data.failed > 5 ? `\n...and ${res.data.failed - 5} more row(s)` : "")
-          : "")
+      setPendingUploadRows(
+        studentsToUpload.map((student, index) => ({ excelRow: index + 2, student, error: "" }))
       );
+      setUploadPreviewOpen(true);
     } catch (err) {
-      console.error("Bulk student upload failed:", err);
-      alert(`❌ ${err.response?.data?.error || "Failed to upload student records"}`);
+      console.error("Could not read student workbook:", err);
+      alert("❌ Could not read this Excel file. Check that it is a valid .xlsx or .xls workbook.");
     } finally {
       event.target.value = "";
       setBulkUploading(false);
     }
   };
+
+  const saveBulkUpload = async () => {
+    const invalidRows = pendingUploadRows
+      .map(({ excelRow, student }) => {
+        const missing = REQUIRED_STUDENT_COLUMNS
+          .filter(({ field }) => String(student[field] ?? "").trim() === "")
+          .map(({ label }) => label);
+        return missing.length ? `Excel row ${excelRow}: ${missing.join(", ")}` : null;
+      })
+      .filter(Boolean);
+
+    if (invalidRows.length) {
+      alert(
+        `Please fill the required fields before saving:\n${invalidRows.slice(0, 5).join("\n")}` +
+        (invalidRows.length > 5 ? `\n...and ${invalidRows.length - 5} more row(s)` : "")
+      );
+      return;
+    }
+
+    if (!window.confirm(`Save ${pendingUploadRows.length} student record(s) to the database?`)) return;
+
+    setBulkSaving(true);
+    try {
+      const res = await axios.post("http://localhost:5000/api/students/bulk-upload", {
+        students: pendingUploadRows.map(({ student }) => student),
+      });
+      const errors = res.data.errors || [];
+      const failedIndexes = new Set(errors.map((item) => item.row - 2));
+      const failedRows = pendingUploadRows
+        .flatMap((row, index) =>
+          failedIndexes.has(index)
+            ? [{
+                ...row,
+                error: errors.find((item) => item.row === index + 2)?.error || "Could not save this row",
+              }]
+            : []
+        );
+
+      setPendingUploadRows(failedRows);
+      setSelectedIds([]);
+      await fetchStudents();
+
+      if (failedRows.length === 0) {
+        setUploadPreviewOpen(false);
+        alert(`✅ ${res.data.created} student(s) saved successfully.`);
+      } else {
+        const failureSummary = failedRows
+          .slice(0, 5)
+          .map((row) => `Excel row ${row.excelRow}: ${row.error}`)
+          .join("\n");
+        alert(
+          `✅ ${res.data.created} student(s) saved.\n❌ ${failedRows.length} row(s) need correction:\n${failureSummary}` +
+          (failedRows.length > 5 ? `\n...and ${failedRows.length - 5} more row(s)` : "")
+        );
+      }
+    } catch (err) {
+      console.error("Bulk student save failed:", err);
+      alert(`❌ ${err.response?.data?.error || "Failed to save student records"}`);
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  const openUploadRowEditor = (index) => {
+    setEditingUploadIndex(index);
+    setUploadDraft({ ...pendingUploadRows[index].student });
+  };
+
+  const saveUploadRowEdit = () => {
+    setPendingUploadRows((previous) =>
+      previous.map((row, index) =>
+        index === editingUploadIndex ? { ...row, student: uploadDraft, error: "" } : row
+      )
+    );
+    setEditingUploadIndex(null);
+  };
+
+  const openStudentEditor = (student) => {
+    setEditingStudent(student);
+    setStudentDraft(
+      Object.fromEntries(STUDENT_FIELDS.map(({ key }) => [key, student[key] ?? ""]))
+    );
+  };
+
+  const saveStudentChanges = async () => {
+    const missing = REQUIRED_STUDENT_COLUMNS
+      .filter(({ field }) => String(studentDraft[field] ?? "").trim() === "")
+      .map(({ label }) => label);
+    if (missing.length) {
+      alert(`Please fill required fields: ${missing.join(", ")}`);
+      return;
+    }
+
+    setStudentSaving(true);
+    try {
+      const res = await axios.put(
+        `http://localhost:5000/api/students/${editingStudent._id}`,
+        studentDraft
+      );
+      await fetchStudents();
+      setEditingStudent(null);
+      alert(res.data.message || "✅ Student details updated.");
+    } catch (err) {
+      console.error("Student update failed:", err);
+      alert(`❌ ${err.response?.data?.error || "Failed to save student changes"}`);
+    } finally {
+      setStudentSaving(false);
+    }
+  };
+
+  const renderStudentFields = (values, setValues) => (
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+      {STUDENT_FIELDS.map((field) => (
+        <TextField
+          key={field.key}
+          select={field.type === "select"}
+          type={field.type === "select" ? "text" : field.type}
+          fullWidth
+          label={field.label}
+          required={REQUIRED_STUDENT_COLUMNS.some((required) => required.field === field.key)}
+          value={values[field.key] ?? ""}
+          onChange={(event) =>
+            setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
+          }
+          size="small"
+          InputLabelProps={field.type === "date" ? { shrink: true } : undefined}
+          SelectProps={
+            field.type === "select"
+              ? { native: true }
+              : undefined
+          }
+        >
+          {field.type === "select" && (
+            <>
+              <option value="">Not provided</option>
+              {field.options.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </>
+          )}
+        </TextField>
+      ))}
+    </Box>
+  );
 
   const assignOldMentors = async () => {
     try {
@@ -456,9 +609,10 @@ export default function ManageStudents({ isActiveTab }) {
                     </Box>
                   </Box>
                   <Alert severity="info" sx={{ mb: 2 }}>
-                    Excel ki har row mein ye required columns bharein:{" "}
+                    Sirf ye 3 fields zaroori hain:{" "}
                     {REQUIRED_STUDENT_COLUMNS.map(({ label }) => label).join(", ")}.
-                    Student ID aur password system khud generate karega; baaki optional fields bhi upload kar sakte hain.
+                    Baaki details optional hain—abhi ya baad mein Edit karke add karein. Excel upload ke baad
+                    preview mein changes karke Save to Database dabayein.
                   </Alert>
 
                   {filteredStudents.length === 0 ? (
@@ -537,7 +691,11 @@ export default function ManageStudents({ isActiveTab }) {
                               <TableCell align="right">
                                 <Box className="flex gap-1 justify-end">
                                   <Tooltip title="Edit">
-                                    <IconButton size="small" color="primary">
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      onClick={() => openStudentEditor(student)}
+                                    >
                                       <EditRoundedIcon fontSize="small" />
                                     </IconButton>
                                   </Tooltip>
@@ -685,6 +843,107 @@ export default function ManageStudents({ isActiveTab }) {
               startIcon={<UpdateRoundedIcon />}
             >
               {bulkUpdating ? "Updating..." : "Update Students"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={uploadPreviewOpen}
+          onClose={() => !bulkSaving && setUploadPreviewOpen(false)}
+          fullWidth
+          maxWidth="md"
+        >
+          <DialogTitle sx={{ fontWeight: 700 }}>Review Excel Student Upload</DialogTitle>
+          <DialogContent dividers>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Sirf Full Name, Email aur Course compulsory hain. Baaki details blank chhod sakte hain
+              aur student create hone ke baad Edit button se add kar sakte hain. Har row ko database
+              mein save karne se pehle Edit karke check karein.
+            </Alert>
+            <TableContainer sx={{ maxHeight: 420 }}>
+              <Table stickyHeader size="small">
+                <TableHead>
+                  <TableRow>
+                    {["Excel Row", "Full Name", "Email", "Course", "Review"].map((heading) => (
+                      <TableCell key={heading} sx={{ fontWeight: 700, bgcolor: "#f4f6f9" }}>
+                        {heading}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {pendingUploadRows.map((row, index) => (
+                    <TableRow key={`${row.excelRow}-${row.student.email || index}`}>
+                      <TableCell>{row.excelRow}</TableCell>
+                      <TableCell>{row.student.fullName || "Missing"}</TableCell>
+                      <TableCell>{row.student.email || "Missing"}</TableCell>
+                      <TableCell>{row.student.courseApplied || "Missing"}</TableCell>
+                      <TableCell>
+                        <Button size="small" onClick={() => openUploadRowEditor(index)}>
+                          Edit details
+                        </Button>
+                        {row.error && (
+                          <Typography variant="caption" color="error" display="block">
+                            {row.error}
+                          </Typography>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setUploadPreviewOpen(false)} disabled={bulkSaving}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={saveBulkUpload} disabled={bulkSaving || pendingUploadRows.length === 0}>
+              {bulkSaving ? "Saving..." : "Save to Database"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={editingUploadIndex !== null}
+          onClose={() => setEditingUploadIndex(null)}
+          fullWidth
+          maxWidth="md"
+        >
+          <DialogTitle sx={{ fontWeight: 700 }}>
+            Edit Excel Row {editingUploadIndex === null ? "" : pendingUploadRows[editingUploadIndex]?.excelRow}
+          </DialogTitle>
+          <DialogContent dividers>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Name, Email and Course are required. Every other field can be filled later.
+            </Typography>
+            {renderStudentFields(uploadDraft, setUploadDraft)}
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setEditingUploadIndex(null)}>Cancel</Button>
+            <Button variant="contained" onClick={saveUploadRowEdit}>Save Row Changes</Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={Boolean(editingStudent)}
+          onClose={() => !studentSaving && setEditingStudent(null)}
+          fullWidth
+          maxWidth="md"
+        >
+          <DialogTitle sx={{ fontWeight: 700 }}>
+            Edit Student {editingStudent?.studentId ? `— ${editingStudent.studentId}` : ""}
+          </DialogTitle>
+          <DialogContent dividers>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Name, Email and Course are required. Add or change the remaining details whenever available.
+            </Typography>
+            {renderStudentFields(studentDraft, setStudentDraft)}
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button onClick={() => setEditingStudent(null)} disabled={studentSaving}>Cancel</Button>
+            <Button variant="contained" onClick={saveStudentChanges} disabled={studentSaving}>
+              {studentSaving ? "Saving..." : "Save Changes"}
             </Button>
           </DialogActions>
         </Dialog>
