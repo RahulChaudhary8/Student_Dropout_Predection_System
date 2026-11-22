@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import AddMentorForm from "./AddMentorForm";
-import ManageClasses from "./ManageClasses";
-import AssignClassesDialog from "./AssignClassesDialog";
+import EditMentorBranchesDialog from "./EditMentorBranchesDialog";
 import {
   Box,
   Typography,
@@ -24,18 +23,27 @@ import {
 } from "@mui/material";
 import PersonAddRoundedIcon from "@mui/icons-material/PersonAddRounded";
 import ManageAccountsRoundedIcon from "@mui/icons-material/ManageAccountsRounded";
-import ClassRoundedIcon from "@mui/icons-material/ClassRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 import ToggleOnRoundedIcon from "@mui/icons-material/ToggleOnRounded";
 import ToggleOffRoundedIcon from "@mui/icons-material/ToggleOffRounded";
-import AssignmentIndRoundedIcon from "@mui/icons-material/AssignmentIndRounded";
 import InboxRoundedIcon from "@mui/icons-material/InboxRounded";
+
+const getAssignedCourseBranches = (assignments = []) => [
+  ...new Map(
+    assignments.map((assignment) => {
+      const courseName =
+        typeof assignment.courseId === "object" ? assignment.courseId?.name || "Course" : "Course";
+      const key = `${courseName}::${assignment.branch}`;
+      return [key, { courseName, branch: assignment.branch }];
+    })
+  ).values(),
+];
 
 export default function ManageMentors() {
   const [activeSection, setActiveSection] = useState("table");
   const [mentors, setMentors] = useState([]);
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [selectedMentor, setSelectedMentor] = useState(null);
 
   const handleAddMentor = () => {
@@ -92,18 +100,16 @@ export default function ManageMentors() {
     }
   };
 
-  const handleOpenAssignDialog = (mentor) => {
-    setSelectedMentor(mentor);
-    setAssignDialogOpen(true);
-  };
-
-  const handleClassesAssigned = (updatedMentor) => {
-    setMentors((prev) =>
-      prev.map((m) =>
-        m._id === updatedMentor._id
-          ? { ...m, assignedClasses: updatedMentor.assignedClasses }
-          : m
+  const handleBranchAssignmentsSaved = (result) => {
+    setMentors((previous) =>
+      previous.map((mentor) =>
+        mentor._id === result.mentor._id
+          ? { ...mentor, subjectAssignments: result.mentor.subjectAssignments }
+          : mentor
       )
+    );
+    alert(
+      `${result.matchedStudentCount} matching student(s) found; ${result.assignedStudentCount} assignment(s) updated.`
     );
   };
 
@@ -141,7 +147,7 @@ export default function ManageMentors() {
 
         {/* Action Cards */}
         <Grid container spacing={3} className="mb-6">
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={6}>
             <Grow in timeout={400}>
               <Card
                 elevation={0}
@@ -172,7 +178,7 @@ export default function ManageMentors() {
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={6}>
             <Grow in timeout={500}>
               <Card
                 elevation={0}
@@ -203,51 +209,12 @@ export default function ManageMentors() {
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={4}>
-            <Grow in timeout={600}>
-              <Card
-                elevation={0}
-                onClick={() => setActiveSection("manageClasses")}
-                className="cursor-pointer transition-all duration-300"
-                sx={{
-                  border: "1px solid #e2e8f0",
-                  "&:hover": {
-                    transform: "translateY(-5px)",
-                    boxShadow: "0 12px 24px -8px rgba(15, 23, 42, 0.15)",
-                    bgcolor: "#f9fafc",
-                  },
-                }}
-              >
-                <CardContent className="flex items-center gap-3">
-                  <Avatar sx={{ bgcolor: "warning.main", width: 48, height: 48 }}>
-                    <ClassRoundedIcon />
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      Manage Classes
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Create branches/classes to assign.
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grow>
-          </Grid>
         </Grid>
 
         {activeSection === "addMentor" && (
           <Fade in timeout={400}>
             <Box>
               <AddMentorForm onMentorAdded={handleMentorAdded} />
-            </Box>
-          </Fade>
-        )}
-
-        {activeSection === "manageClasses" && (
-          <Fade in timeout={400}>
-            <Box>
-              <ManageClasses />
             </Box>
           </Fade>
         )}
@@ -321,19 +288,16 @@ export default function ManageMentors() {
                               <TableCell>{mentor.plainPassword}</TableCell>
                               <TableCell>
                                 <Box className="flex flex-wrap gap-1" sx={{ maxWidth: 220 }}>
-                                  {mentor.assignedClasses && mentor.assignedClasses.length > 0 ? (
-                                    mentor.assignedClasses.map((cls) => (
-                                      <Chip
-                                        key={cls._id || cls}
-                                        label={
-                                          cls.branch
-                                            ? `${cls.branch} - ${cls.year}${cls.section ? ` (${cls.section})` : ""
-                                            }`
-                                            : "Class"
-                                        }
-                                        size="small"
-                                      />
-                                    ))
+                                  {getAssignedCourseBranches(mentor.subjectAssignments).length > 0 ? (
+                                    getAssignedCourseBranches(mentor.subjectAssignments).map(
+                                      ({ courseName, branch }) => (
+                                        <Chip
+                                          key={`${courseName}-${branch}`}
+                                          label={`${courseName} - ${branch}`}
+                                          size="small"
+                                        />
+                                      )
+                                    )
                                   ) : (
                                     <Typography variant="body2" color="text.secondary">
                                       Not assigned
@@ -345,14 +309,18 @@ export default function ManageMentors() {
                                 <Box className="flex flex-wrap gap-1" sx={{ maxWidth: 320 }}>
                                   {mentor.subjectAssignments?.length > 0 ? (
                                     mentor.subjectAssignments.map((assignment, index) => {
-                                      const courseName =
+                                      const course =
                                         typeof assignment.courseId === "object"
-                                          ? assignment.courseId?.name
-                                          : "";
+                                          ? assignment.courseId
+                                          : null;
+                                      const courseName = course?.name || "Course";
+                                      const periodName = assignment.period
+                                        ? `${course?.studyMode === "semester" ? "Semester" : "Year"} ${assignment.period}`
+                                        : "";
                                       return (
                                         <Chip
                                           key={`${courseName}-${assignment.branch}-${index}`}
-                                          label={`${courseName || "Course"} - ${assignment.branch}: ${assignment.subjects.join(", ")}`}
+                                          label={`${courseName} - ${assignment.branch}${periodName ? ` - ${periodName}` : ""}${assignment.subjects?.length ? `: ${assignment.subjects.join(", ")}` : ""}`}
                                           size="small"
                                         />
                                       );
@@ -374,17 +342,15 @@ export default function ManageMentors() {
                               </TableCell>
                               <TableCell align="right">
                                 <Box className="flex gap-1 justify-end">
-                                  <Tooltip title="Assign Classes">
+                                  <Tooltip title="Edit assigned branches">
                                     <IconButton
                                       size="small"
-                                      color="warning"
-                                      onClick={() => handleOpenAssignDialog(mentor)}
+                                      color="primary"
+                                      onClick={() => {
+                                        setSelectedMentor(mentor);
+                                        setBranchDialogOpen(true);
+                                      }}
                                     >
-                                      <AssignmentIndRoundedIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Edit">
-                                    <IconButton size="small" color="primary">
                                       <EditRoundedIcon fontSize="small" />
                                     </IconButton>
                                   </Tooltip>
@@ -426,11 +392,11 @@ export default function ManageMentors() {
           </Fade>
         )}
 
-        <AssignClassesDialog
-          open={assignDialogOpen}
-          onClose={() => setAssignDialogOpen(false)}
+        <EditMentorBranchesDialog
+          open={branchDialogOpen}
+          onClose={() => setBranchDialogOpen(false)}
           mentor={selectedMentor}
-          onSaved={handleClassesAssigned}
+          onSaved={handleBranchAssignmentsSaved}
         />
       </Box>
     </Fade>

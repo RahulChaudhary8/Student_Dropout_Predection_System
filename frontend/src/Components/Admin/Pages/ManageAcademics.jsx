@@ -47,11 +47,15 @@ export default function ManageAcademics() {
   const [programs, setPrograms] = useState([]);
   const [mentors, setMentors] = useState([]);
   const [courseName, setCourseName] = useState("");
+  const [courseStudyMode, setCourseStudyMode] = useState("yearly");
+  const [coursePeriodCount, setCoursePeriodCount] = useState("4");
   const [branchDrafts, setBranchDrafts] = useState({});
+  const [structureDrafts, setStructureDrafts] = useState({});
   const [subjectDrafts, setSubjectDrafts] = useState({});
   const [mentorId, setMentorId] = useState("");
   const [courseId, setCourseId] = useState("");
   const [branchName, setBranchName] = useState("");
+  const [period, setPeriod] = useState("1");
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -63,6 +67,17 @@ export default function ManageAcademics() {
       request("/mentors"),
     ]);
     setPrograms(programData);
+    setStructureDrafts(
+      Object.fromEntries(
+        programData.map((program) => [
+          program._id,
+          {
+            studyMode: program.studyMode || "yearly",
+            periodCount: String(program.periodCount || 4),
+          },
+        ])
+      )
+    );
     setMentors(mentorData);
     setMentorId((current) => current || mentorData[0]?._id || "");
     setCourseId((current) => current || programData[0]?._id || "");
@@ -79,16 +94,21 @@ export default function ManageAcademics() {
   const availableBranches = selectedProgram?.branches || [];
   const selectedBranch = availableBranches.find((branch) => branch.name === branchName);
   const availableSubjects = selectedBranch?.subjects || [];
+  const periodLabel = selectedProgram?.studyMode === "semester" ? "Semester" : "Year";
+  const periodCount = selectedProgram?.periodCount || (periodLabel === "Semester" ? 8 : 4);
   const selectedMentor = mentors.find((mentor) => mentor._id === mentorId);
 
   useEffect(() => {
-    const existing = selectedMentor?.subjectAssignments?.find(
+    const assignments = selectedMentor?.subjectAssignments?.filter(
       (assignment) =>
         assignmentCourseId(assignment) === courseId &&
         assignment.branch === branchName
     );
+    const existing =
+      assignments?.find((assignment) => Number(assignment.period) === Number(period)) ||
+      assignments?.find((assignment) => assignment.period == null);
     setSelectedSubjects(existing?.subjects || []);
-  }, [selectedMentor, courseId, branchName]);
+  }, [selectedMentor, courseId, branchName, period]);
 
   const runAction = async (key, action, message) => {
     setError("");
@@ -130,7 +150,11 @@ export default function ManageAcademics() {
       async () => {
         const program = await request("/academics", {
           method: "POST",
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({
+            name,
+            studyMode: courseStudyMode,
+            periodCount: coursePeriodCount,
+          }),
         });
         return { program };
       },
@@ -138,9 +162,31 @@ export default function ManageAcademics() {
     );
     if (result?.program) {
       setCourseName("");
+      setCourseStudyMode("yearly");
+      setCoursePeriodCount("4");
       setCourseId(result.program._id);
       setBranchName("");
     }
+  };
+
+  const saveCourseStructure = async (program) => {
+    const draft = structureDrafts[program._id] || {};
+    const periodCount = Number(draft.periodCount);
+    if (!Number.isInteger(periodCount) || periodCount < 1) {
+      setError("Period count must be a positive whole number.");
+      return;
+    }
+
+    await runAction(
+      `structure-${program._id}`,
+      async () => ({
+        program: await request(`/academics/${program._id}`, {
+          method: "PUT",
+          body: JSON.stringify({ studyMode: draft.studyMode, periodCount }),
+        }),
+      }),
+      "Course study structure updated."
+    );
   };
 
   const addBranch = async (program) => {
@@ -216,21 +262,30 @@ export default function ManageAcademics() {
   const saveAssignment = async () => {
     const result = await runAction(
       "assignment",
-      async () => ({
-        mentor: await request(`/mentors/${mentorId}/subject-assignments`, {
+      async () => {
+        const response = await request(`/mentors/${mentorId}/subject-assignments`, {
           method: "PATCH",
           body: JSON.stringify({
             courseId,
             branch: branchName,
+            period: Number(period),
             subjects: selectedSubjects,
           }),
-        }),
-      }),
+        });
+        return {
+          mentor: response.mentor,
+          matchedStudentCount: response.matchedStudentCount,
+          assignedStudentCount: response.assignedStudentCount,
+        };
+      },
       "Mentor subject assignment saved."
     );
     if (result?.mentor) {
       setMentors((current) =>
         current.map((mentor) => (mentor._id === result.mentor._id ? result.mentor : mentor))
+      );
+      setSuccess(
+        `Mentor assignment saved. ${result.matchedStudentCount} matching student(s) found; ${result.assignedStudentCount} assignment(s) updated.`
       );
     }
   };
@@ -250,7 +305,8 @@ export default function ManageAcademics() {
       </Typography>
       <Typography color="text.secondary" sx={{ mb: 3 }}>
         Set up courses and branches, add their subjects, then assign subjects to mentors.
-        Use the same course and branch names as student profiles.
+        Choose each course&apos;s year-wise or semester-wise structure, then assign subjects for a
+        specific year or semester. Use the same course and branch names as student profiles.
       </Typography>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -270,6 +326,28 @@ export default function ManageAcademics() {
               size="small"
               required
               sx={{ minWidth: 260 }}
+            />
+            <TextField
+              select
+              label="Study mode"
+              value={courseStudyMode}
+              onChange={(event) => setCourseStudyMode(event.target.value)}
+              size="small"
+              SelectProps={{ native: true }}
+              sx={{ minWidth: 160 }}
+            >
+              <option value="yearly">Year-wise</option>
+              <option value="semester">Semester-wise</option>
+            </TextField>
+            <TextField
+              label={courseStudyMode === "yearly" ? "Number of years" : "Number of semesters"}
+              type="number"
+              inputProps={{ min: 1, step: 1 }}
+              value={coursePeriodCount}
+              onChange={(event) => setCoursePeriodCount(event.target.value)}
+              size="small"
+              required
+              sx={{ width: 180 }}
             />
             <Button type="submit" variant="contained" startIcon={<AddRoundedIcon />} disabled={busy === "course"}>
               Add Course
@@ -344,6 +422,63 @@ export default function ManageAcademics() {
                     </Tooltip>
                   </Box>
                 </Stack>
+
+                <Grid container spacing={1.5} alignItems="center" sx={{ mt: 1 }}>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="Study mode"
+                      value={structureDrafts[program._id]?.studyMode || program.studyMode || "yearly"}
+                      onChange={(event) =>
+                        setStructureDrafts((current) => ({
+                          ...current,
+                          [program._id]: {
+                            ...current[program._id],
+                            studyMode: event.target.value,
+                          },
+                        }))
+                      }
+                      SelectProps={{ native: true }}
+                    >
+                      <option value="yearly">Year-wise</option>
+                      <option value="semester">Semester-wise</option>
+                    </TextField>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="number"
+                      label={
+                        (structureDrafts[program._id]?.studyMode || program.studyMode) === "semester"
+                          ? "Number of semesters"
+                          : "Number of years"
+                      }
+                      inputProps={{ min: 1, step: 1 }}
+                      value={structureDrafts[program._id]?.periodCount || program.periodCount || 4}
+                      onChange={(event) =>
+                        setStructureDrafts((current) => ({
+                          ...current,
+                          [program._id]: {
+                            ...current[program._id],
+                            periodCount: event.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => saveCourseStructure(program)}
+                      disabled={busy === `structure-${program._id}`}
+                    >
+                      Save Study Structure
+                    </Button>
+                  </Grid>
+                </Grid>
 
                 <Divider sx={{ my: 2 }} />
                 {program.branches.length === 0 ? (
@@ -430,7 +565,7 @@ export default function ManageAcademics() {
         <CardContent>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
             <MenuBookRoundedIcon color="primary" />
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>Assign Subjects to Mentor</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>Assign Subjects by Year / Semester</Typography>
           </Stack>
           {mentors.length === 0 ? (
             <Alert severity="info">Add a mentor before assigning subjects.</Alert>
@@ -439,7 +574,7 @@ export default function ManageAcademics() {
           ) : (
             <>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={3}>
                   <TextField
                     select
                     fullWidth
@@ -456,7 +591,7 @@ export default function ManageAcademics() {
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={3}>
                   <TextField
                     select
                     fullWidth
@@ -465,6 +600,7 @@ export default function ManageAcademics() {
                     onChange={(event) => {
                       setCourseId(event.target.value);
                       setBranchName("");
+                      setPeriod("1");
                     }}
                     SelectProps={{ native: true }}
                     InputLabelProps={{ shrink: true }}
@@ -474,7 +610,7 @@ export default function ManageAcademics() {
                     ))}
                   </TextField>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={3}>
                   <TextField
                     select
                     fullWidth
@@ -491,12 +627,30 @@ export default function ManageAcademics() {
                     ))}
                   </TextField>
                 </Grid>
+                <Grid item xs={12} md={3}>
+                  <TextField
+                    select
+                    fullWidth
+                    label={periodLabel}
+                    value={period}
+                    onChange={(event) => setPeriod(event.target.value)}
+                    disabled={!selectedProgram}
+                    SelectProps={{ native: true }}
+                    InputLabelProps={{ shrink: true }}
+                  >
+                    {Array.from({ length: periodCount }, (_, index) => (
+                      <option key={index + 1} value={index + 1}>
+                        {periodLabel} {index + 1}
+                      </option>
+                    ))}
+                  </TextField>
+                </Grid>
               </Grid>
 
               {branchName && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                    Subjects for {selectedProgram?.name} - {branchName}
+                    Subjects for {selectedProgram?.name} - {branchName} - {periodLabel} {period}
                   </Typography>
                   {availableSubjects.length === 0 ? (
                     <Alert severity="info">Add subjects to this branch in the Academic Catalog first.</Alert>

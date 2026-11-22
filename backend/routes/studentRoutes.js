@@ -1,13 +1,70 @@
 import express from "express";
+import mongoose from "mongoose";
+import AcademicProgram from "../models/AcademicProgram.js";
 import Student from "../models/Student.js";
-import Mentor from "../models/Mentor.js";
 import bcrypt from "bcryptjs";
 import {
   resolveStudentIdentity,
   ensureCounterSeeded,
 } from "../utils/idGenerator.js";
+import {
+  exactTextPattern,
+  findMentorsForStudentGroup,
+  selectMentorForStudentGroup,
+} from "../utils/mentorAssignment.js";
 
 const router = express.Router();
+
+const validateAcademicPeriod = async (
+  courseName,
+  studentData,
+  { required = false, warnings = null } = {}
+) => {
+  const program = await AcademicProgram.findOne({ name: exactTextPattern(courseName) });
+  if (!program) return null;
+
+  const periodField = program.studyMode === "semester" ? "semester" : "academicYear";
+  const otherPeriodField = periodField === "semester" ? "academicYear" : "semester";
+  if (studentData[otherPeriodField] !== undefined && studentData[otherPeriodField] !== null) {
+    if (warnings) {
+      warnings.push(`${otherPeriodField} was skipped because this course uses ${program.studyMode} periods`);
+      delete studentData[otherPeriodField];
+    } else {
+      const error = new Error(`This course uses ${program.studyMode} periods`);
+      error.status = 400;
+      throw error;
+    }
+  }
+
+  const rawPeriod = studentData[periodField];
+  if (rawPeriod === undefined || rawPeriod === null || rawPeriod === "") {
+    if (required) {
+      const error = new Error(`${program.studyMode === "semester" ? "Semester" : "Academic year"} is required`);
+      error.status = 400;
+      throw error;
+    }
+    return null;
+  }
+
+  const period = Number(rawPeriod);
+  if (!Number.isInteger(period) || period < 1 || period > program.periodCount) {
+    if (warnings) {
+      warnings.push(
+        `${periodField} was skipped because it must be between 1 and ${program.periodCount}`
+      );
+      delete studentData[periodField];
+      return null;
+    }
+    const error = new Error(
+      `${program.studyMode === "semester" ? "Semester" : "Academic year"} must be between 1 and ${program.periodCount}`
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  studentData[periodField] = period;
+  return period;
+};
 
 // One-time bootstrap so the atomic counter starts past any Student IDs
 // that already exist in the DB from before this centralized generator
@@ -16,9 +73,6 @@ const router = express.Router();
 ensureCounterSeeded().catch((err) =>
   console.error("⚠️ Failed to seed student ID counter:", err)
 );
-
-// Round-robin counters for each specialization
-let mentorCounters = {}; // { "Math": 0, "Physics": 1, ... }
 
 // POST - Add Student + Assign Mentor
 router.post("/", async (req, res) => {
@@ -38,36 +92,49 @@ router.post("/", async (req, res) => {
       }
     }
 
-    // The form never legitimately carries a Student ID or password —
-    // those are always system-assigned. Passing no studentId here forces
-    // resolveStudentIdentity into the "fresh registration" branch, the
-    // exact same code path bulk import uses for a blank Student ID column.
-    const identity = await resolveStudentIdentity({});
-
     // === Mentor Assignment Logic ===
-    const studentCourse = req.body.courseApplied; // course of the student
-    const mentors = await Mentor.find({
-      specialization: { $regex: new RegExp(studentCourse, "i") },
-      active: true,
-    });
-    console.log("👉 Student Course:", studentCourse);
-    console.log("👉 Mentors Found:", mentors);
-
+    const studentCourse = req.body.courseApplied;
+    const studentBranch = req.body.branchSpecialization;
+    const studentPeriod = await validateAcademicPeriod(studentCourse, req.body, { required: true });
+    const matchingMentors = await findMentorsForStudentGroup(
+      studentCourse,
+      studentBranch,
+      studentPeriod
+    );
     let assignedMentor = null;
-    if (mentors.length > 0) {
-      const lastIndex = mentorCounters[studentCourse] || -1;
-      const nextIndex = (lastIndex + 1) % mentors.length;
-      assignedMentor = mentors[nextIndex];
-
-      // update counter
-      mentorCounters[studentCourse] = nextIndex;
+    const requestedMentorId = req.body.assignedMentorId;
+    if (requestedMentorId && requestedMentorId !== "__NONE__") {
+      if (!mongoose.isValidObjectId(requestedMentorId)) {
+        return res.status(400).json({ error: "Select a valid mentor" });
+      }
+      assignedMentor = matchingMentors.find(
+        (mentor) => String(mentor._id) === requestedMentorId
+      );
+      if (!assignedMentor) {
+        return res.status(400).json({
+          error: "Selected mentor is not assigned to this course and branch",
+        });
+      }
+    } else if (requestedMentorId !== "__NONE__") {
+      assignedMentor = selectMentorForStudentGroup(
+        studentCourse,
+        studentBranch,
+        matchingMentors,
+        studentPeriod
+      );
     }
 
     // Agar mentor nahi mila to bhi student save hoga — mentor baad me manually assign ho sakta hai
     if (!assignedMentor) {
-      console.log(`⚠️ No mentor available for course: ${studentCourse}. Student will be saved without a mentor.`);
+      console.log(
+        `⚠️ No mentor available for ${studentCourse} / ${studentBranch || "no branch"}. Student will be saved without a mentor.`
+      );
     }
 
+    // The form never legitimately carries a Student ID or password —
+    // those are always system-assigned. Passing no studentId here forces
+    // resolveStudentIdentity into the "fresh registration" branch.
+    const identity = await resolveStudentIdentity({});
     const hashedPassword = await bcrypt.hash(identity.plainPassword, 10);
 
     // Note: studentId/password/plainPassword are set AFTER the ...req.body
@@ -87,7 +154,9 @@ router.post("/", async (req, res) => {
     res.status(201).json({
       message: assignedMentor
         ? "✅ Student added successfully"
-        : `✅ Student added successfully, but ⚠️ no mentor found for course: ${studentCourse}. Please assign one manually.`,
+        : requestedMentorId === "__NONE__"
+          ? "✅ Student added successfully without a mentor"
+          : `✅ Student added successfully, but ⚠️ no mentor found for ${studentCourse} / ${studentBranch || "no branch"}. Please assign one manually.`,
       student: newStudent,
       generatedPassword: identity.plainPassword,
       assignedMentor: assignedMentor
@@ -113,6 +182,9 @@ router.post("/", async (req, res) => {
         details: error.message,
       });
     }
+    if (error?.status === 400) {
+      return res.status(400).json({ error: error.message });
+    }
 
     res.status(500).json({ error: "❌ Failed to save student" });
   }
@@ -126,7 +198,7 @@ router.post("/bulk-upload", async (req, res) => {
     return res.status(400).json({ error: "A non-empty students array is required" });
   }
 
-  const requiredFields = ["fullName", "email", "courseApplied"];
+  const requiredFields = ["fullName", "email"];
   const allowedFields = [
     ...requiredFields,
     "dateOfBirth",
@@ -147,6 +219,8 @@ router.post("/bulk-upload", async (req, res) => {
     "nationality",
     "bloodGroup",
     "branchSpecialization",
+    "academicYear",
+    "semester",
     "entranceExamScore",
     "fatherOccupation",
     "motherOccupation",
@@ -158,11 +232,20 @@ router.post("/bulk-upload", async (req, res) => {
     "religion",
     "hostelRequired",
     "transportRequired",
+    "assignedMentorId",
   ];
-  const numericFields = ["yearOfAddmission", "yearOfPassing", "annualFamilyIncome", "totalCourseFees"];
+  const numericFields = [
+    "academicYear",
+    "semester",
+    "yearOfAddmission",
+    "yearOfPassing",
+    "annualFamilyIncome",
+    "totalCourseFees",
+  ];
   const seenEmails = new Set();
   const createdIds = [];
   const errors = [];
+  const warnings = [];
 
   for (const [index, row] of students.entries()) {
     try {
@@ -185,6 +268,7 @@ router.post("/bulk-upload", async (req, res) => {
         throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
       }
 
+      studentData.courseApplied = String(studentData.courseApplied || "").trim() || "Not Provided";
       studentData.email = String(studentData.email).trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentData.email)) {
         throw new Error("Email is invalid");
@@ -201,14 +285,17 @@ router.post("/bulk-upload", async (req, res) => {
         hostelRequired: ["Yes", "No"],
         transportRequired: ["Yes", "No"],
       };
+      const rowWarnings = [];
       for (const [field, values] of Object.entries(enumValues)) {
         if (studentData[field] !== undefined && !values.includes(studentData[field])) {
-          throw new Error(`${field} must be one of: ${values.join(", ")}`);
+          rowWarnings.push(`${field} was skipped because its value is invalid`);
+          delete studentData[field];
         }
       }
 
       if (studentData.aadharNumber !== undefined && !/^\d{12}$/.test(studentData.aadharNumber)) {
-        throw new Error("Aadhar Number must contain exactly 12 digits");
+        rowWarnings.push("Aadhar Number was skipped because it must contain exactly 12 digits");
+        delete studentData.aadharNumber;
       }
 
       if (seenEmails.has(studentData.email)) {
@@ -224,12 +311,19 @@ router.post("/bulk-upload", async (req, res) => {
             ? directNumber
             : Number(String(value).replace(/[^0-9.-]/g, ""));
           if (!Number.isFinite(numberValue)) {
-            throw new Error(`${field} must be a valid number`);
+            rowWarnings.push(`${field} was skipped because its value is not a valid number`);
+            delete studentData[field];
+            continue;
           }
           studentData[field] = numberValue;
         }
       }
 
+      const studentPeriod = await validateAcademicPeriod(
+        studentData.courseApplied,
+        studentData,
+        { warnings: rowWarnings }
+      );
       const existingStudent = await Student.findOne({ email: studentData.email });
       if (existingStudent) {
         throw new Error("A student with this email already exists");
@@ -237,18 +331,31 @@ router.post("/bulk-upload", async (req, res) => {
 
       const identity = await resolveStudentIdentity({});
       const hashedPassword = await bcrypt.hash(identity.plainPassword, 10);
-      const coursePattern = studentData.courseApplied.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const mentors = await Mentor.find({
-        specialization: { $regex: new RegExp(coursePattern, "i") },
-        active: true,
-      });
-
+      const studentBranch = studentData.branchSpecialization;
+      const matchingMentors = await findMentorsForStudentGroup(
+        studentData.courseApplied,
+        studentBranch,
+        studentPeriod
+      );
       let assignedMentor = null;
-      if (mentors.length > 0) {
-        const lastIndex = mentorCounters[studentData.courseApplied] ?? -1;
-        const nextIndex = (lastIndex + 1) % mentors.length;
-        assignedMentor = mentors[nextIndex];
-        mentorCounters[studentData.courseApplied] = nextIndex;
+      const requestedMentorId = studentData.assignedMentorId;
+      if (requestedMentorId && requestedMentorId !== "__NONE__") {
+        if (!mongoose.isValidObjectId(requestedMentorId)) {
+          throw new Error("Assigned Mentor must be a valid mentor ID");
+        }
+        assignedMentor = matchingMentors.find(
+          (mentor) => String(mentor._id) === requestedMentorId
+        );
+        if (!assignedMentor) {
+          throw new Error("Assigned mentor is not assigned to this course and branch");
+        }
+      } else if (requestedMentorId !== "__NONE__") {
+        assignedMentor = selectMentorForStudentGroup(
+          studentData.courseApplied,
+          studentBranch,
+          matchingMentors,
+          studentPeriod
+        );
       }
 
       const student = await Student.create({
@@ -259,6 +366,9 @@ router.post("/bulk-upload", async (req, res) => {
         assignedMentorId: assignedMentor?._id ?? null,
       });
       createdIds.push(student.studentId);
+      if (rowWarnings.length > 0) {
+        warnings.push({ row: index + 2, warnings: rowWarnings });
+      }
     } catch (error) {
       console.warn(`Bulk student upload row ${index + 2} failed:`, error.message);
       errors.push({
@@ -275,6 +385,7 @@ router.post("/bulk-upload", async (req, res) => {
     createdIds,
     failed: errors.length,
     errors,
+    warnings,
   });
 });
 
@@ -289,6 +400,48 @@ router.get("/", async (req, res) => {
     res.json(studentsWithPassword);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch students" });
+  }
+});
+
+// PUT - Assign mentors to old students without mentors
+router.put("/assign-old-mentors", async (req, res) => {
+  try {
+    const studentsWithoutMentor = await Student.find({
+      $or: [{ assignedMentorId: null }, { assignedMentorId: { $exists: false } }],
+    });
+
+    const updatedStudents = [];
+    for (const student of studentsWithoutMentor) {
+      const mentors = await findMentorsForStudentGroup(
+        student.courseApplied,
+        student.branchSpecialization,
+        student.academicYear ?? student.semester
+      );
+      const assignedMentor = selectMentorForStudentGroup(
+        student.courseApplied,
+        student.branchSpecialization,
+        mentors,
+        student.academicYear ?? student.semester
+      );
+      if (!assignedMentor) continue;
+
+      student.assignedMentorId = assignedMentor._id;
+      await student.save();
+      updatedStudents.push({
+        fullName: student.fullName,
+        courseApplied: student.courseApplied,
+        branchSpecialization: student.branchSpecialization,
+        assignedMentor: `${assignedMentor.firstName} ${assignedMentor.lastName}`,
+      });
+    }
+
+    res.json({
+      message: "✅ Old students updated with mentors",
+      updatedStudents,
+    });
+  } catch (error) {
+    console.error("Failed to assign mentors to old students:", error);
+    res.status(500).json({ error: "Failed to assign mentors to old students" });
   }
 });
 
@@ -309,6 +462,8 @@ router.put("/bulk-update", async (req, res) => {
       "fullName",
       "courseApplied",
       "branchSpecialization",
+      "academicYear",
+      "semester",
       "yearOfAddmission",
       "yearOfPassing",
       "phoneNumber",
@@ -332,8 +487,106 @@ router.put("/bulk-update", async (req, res) => {
       return res.status(400).json({ error: "Please provide at least one valid field to update" });
     }
 
+    if (updateData.branchSpecialization === "__NONE__") {
+      updateData.branchSpecialization = null;
+    }
+    for (const field of ["academicYear", "semester"]) {
+      if (updateData[field] === "__NONE__") {
+        updateData[field] = null;
+      } else if (updateData[field] !== undefined) {
+        const period = Number(updateData[field]);
+        if (!Number.isInteger(period) || period < 1) {
+          return res.status(400).json({ error: `${field} must be a positive whole number` });
+        }
+        updateData[field] = period;
+      }
+    }
+
+    const resolvePeriodForStudent = async (student, course) => {
+      const program = await AcademicProgram.findOne({ name: exactTextPattern(course) });
+      if (!program) return student.academicYear ?? student.semester ?? null;
+      const periodField = program.studyMode === "semester" ? "semester" : "academicYear";
+      const courseChanged =
+        updateData.courseApplied !== undefined &&
+        String(updateData.courseApplied).trim().toLowerCase() !==
+          String(student.courseApplied || "").trim().toLowerCase();
+      const periodData = { academicYear: null, semester: null };
+      periodData[periodField] =
+        updateData[periodField] !== undefined
+          ? updateData[periodField]
+          : courseChanged
+            ? null
+            : student[periodField] ?? null;
+      await validateAcademicPeriod(course, periodData, { required: courseChanged });
+      return periodData[periodField] ?? null;
+    };
+
     if (updateData.assignedMentorId === "__NONE__") {
       updateData.assignedMentorId = null;
+    } else if (updateData.assignedMentorId) {
+      if (!mongoose.isValidObjectId(updateData.assignedMentorId)) {
+        return res.status(400).json({ error: "Select a valid mentor" });
+      }
+      const targetStudents = await Student.find({ _id: { $in: studentIds } });
+      for (const student of targetStudents) {
+        const course = updateData.courseApplied ?? student.courseApplied;
+        const branch =
+          updateData.branchSpecialization === null
+            ? ""
+            : updateData.branchSpecialization ?? student.branchSpecialization;
+        const period = await resolvePeriodForStudent(student, course);
+        const matchingMentors = await findMentorsForStudentGroup(course, branch, period);
+        if (!matchingMentors.some((mentor) => String(mentor._id) === updateData.assignedMentorId)) {
+          return res.status(400).json({
+            error: `Selected mentor is not assigned to ${course} / ${branch || "no branch"} for every selected student`,
+          });
+        }
+      }
+      updateData.assignedMentorId = new mongoose.Types.ObjectId(updateData.assignedMentorId);
+    }
+
+    if (
+      (updateData.courseApplied !== undefined ||
+        updateData.branchSpecialization !== undefined ||
+        updateData.academicYear !== undefined ||
+        updateData.semester !== undefined) &&
+      updateData.assignedMentorId === undefined
+    ) {
+      const targetStudents = await Student.find({ _id: { $in: studentIds } });
+      let modifiedCount = 0;
+      for (const student of targetStudents) {
+        const course = updateData.courseApplied ?? student.courseApplied;
+        const branch = Object.prototype.hasOwnProperty.call(
+          updateData,
+          "branchSpecialization"
+        )
+          ? updateData.branchSpecialization || ""
+          : student.branchSpecialization;
+        const period = await resolvePeriodForStudent(student, course);
+        const program = await AcademicProgram.findOne({ name: exactTextPattern(course) });
+        const periodData = { academicYear: null, semester: null };
+        if (program) {
+          periodData[program.studyMode === "semester" ? "semester" : "academicYear"] = period;
+        }
+        const matchingMentors = await findMentorsForStudentGroup(course, branch, period);
+        const existingMentorId = String(student.assignedMentorId || "");
+        const assignedMentor = matchingMentors.find(
+          (mentor) => String(mentor._id) === existingMentorId
+        ) || selectMentorForStudentGroup(course, branch, matchingMentors, period);
+        student.set({
+          ...updateData,
+          ...periodData,
+          assignedMentorId: assignedMentor?._id ?? null,
+        });
+        await student.save();
+        modifiedCount += 1;
+      }
+
+      return res.json({
+        message: `✅ ${modifiedCount} student(s) updated successfully`,
+        matchedCount: targetStudents.length,
+        modifiedCount,
+      });
     }
 
     if (updateData.yearOfAddmission !== undefined) {
@@ -358,6 +611,9 @@ router.put("/bulk-update", async (req, res) => {
     });
   } catch (error) {
     console.error("Bulk student update error:", error);
+    if (error?.status === 400) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to update selected students" });
   }
 });
@@ -382,6 +638,8 @@ router.put("/:id", async (req, res) => {
       "parentEmergencyNumber",
       "courseApplied",
       "branchSpecialization",
+      "academicYear",
+      "semester",
       "previousQualification",
       "boardUniversityName",
       "yearOfAddmission",
@@ -398,6 +656,7 @@ router.put("/:id", async (req, res) => {
       "religion",
       "hostelRequired",
       "transportRequired",
+      "assignedMentorId",
     ];
     const updates = {};
 
@@ -421,12 +680,123 @@ router.put("/:id", async (req, res) => {
 
     const student = await Student.findById(req.params.id);
     if (!student) return res.status(404).json({ error: "Student not found" });
+    const courseChanged =
+      updates.courseApplied !== undefined &&
+      String(updates.courseApplied || "").trim().toLowerCase() !==
+        String(student.courseApplied || "").trim().toLowerCase();
+    const branchChanged =
+      updates.branchSpecialization !== undefined &&
+      String(updates.branchSpecialization || "").trim().toLowerCase() !==
+        String(student.branchSpecialization || "").trim().toLowerCase();
+    for (const field of ["academicYear", "semester"]) {
+      if (updates[field] !== undefined && updates[field] !== null) {
+        const period = Number(updates[field]);
+        if (!Number.isInteger(period) || period < 1) {
+          return res.status(400).json({ error: `${field} must be a positive whole number` });
+        }
+        updates[field] = period;
+      }
+    }
+    const periodChanged =
+      (updates.academicYear !== undefined &&
+        updates.academicYear !== student.academicYear) ||
+      (updates.semester !== undefined && updates.semester !== student.semester);
+    const academicGroupChanged = courseChanged || branchChanged || periodChanged;
+    let studentPeriod =
+      updates.academicYear ?? updates.semester ?? student.academicYear ?? student.semester;
+    if (courseChanged || updates.academicYear !== undefined || updates.semester !== undefined) {
+      const course = updates.courseApplied ?? student.courseApplied;
+      const program = await AcademicProgram.findOne({ name: exactTextPattern(course) });
+      if (program) {
+        const periodField = program.studyMode === "semester" ? "semester" : "academicYear";
+        const periodData = { academicYear: null, semester: null };
+        periodData[periodField] =
+          updates[periodField] !== undefined
+            ? updates[periodField]
+            : courseChanged
+              ? null
+              : student[periodField] ?? null;
+        studentPeriod = await validateAcademicPeriod(course, periodData, {
+          required: courseChanged,
+        });
+        updates.academicYear = periodData.academicYear;
+        updates.semester = periodData.semester;
+      }
+    }
+    if (updates.assignedMentorId !== undefined) {
+      if (updates.assignedMentorId === "__NONE__") {
+        updates.assignedMentorId = null;
+      } else if (updates.assignedMentorId === null && !academicGroupChanged) {
+        updates.assignedMentorId = null;
+      } else if (updates.assignedMentorId === null) {
+        const course = updates.courseApplied ?? student.courseApplied;
+        const branch =
+          updates.branchSpecialization === null
+            ? ""
+            : updates.branchSpecialization ?? student.branchSpecialization;
+        const matchingMentors = await findMentorsForStudentGroup(
+          course,
+          branch,
+          studentPeriod
+        );
+        const assignedMentor = selectMentorForStudentGroup(
+          course,
+          branch,
+          matchingMentors,
+          studentPeriod
+        );
+        updates.assignedMentorId = assignedMentor?._id ?? null;
+      } else {
+        if (!mongoose.isValidObjectId(updates.assignedMentorId)) {
+          return res.status(400).json({ error: "Select a valid mentor" });
+        }
+        const course = updates.courseApplied ?? student.courseApplied;
+        const branch =
+          updates.branchSpecialization === null
+            ? ""
+            : updates.branchSpecialization ?? student.branchSpecialization;
+        const sameAsCurrent =
+          String(student.assignedMentorId || "") === String(updates.assignedMentorId);
+        if (!sameAsCurrent || academicGroupChanged) {
+          const matchingMentors = await findMentorsForStudentGroup(
+            course,
+            branch,
+            studentPeriod
+          );
+          if (!matchingMentors.some((mentor) => String(mentor._id) === updates.assignedMentorId)) {
+            return res.status(400).json({
+              error: "Selected mentor is not assigned to this course and branch",
+            });
+          }
+        }
+        updates.assignedMentorId = new mongoose.Types.ObjectId(updates.assignedMentorId);
+      }
+    } else if (academicGroupChanged) {
+      const course = updates.courseApplied ?? student.courseApplied;
+      const branch =
+        updates.branchSpecialization === null
+          ? ""
+          : updates.branchSpecialization ?? student.branchSpecialization;
+      const matchingMentors = await findMentorsForStudentGroup(
+        course,
+        branch,
+        studentPeriod
+      );
+      const existingMentorId = String(student.assignedMentorId || "");
+      const assignedMentor = matchingMentors.find(
+        (mentor) => String(mentor._id) === existingMentorId
+      ) || selectMentorForStudentGroup(course, branch, matchingMentors, studentPeriod);
+      updates.assignedMentorId = assignedMentor?._id ?? null;
+    }
     student.set(updates);
     await student.save();
 
     res.json({ message: "Student updated successfully", student });
   } catch (error) {
     console.error("Student update error:", error);
+    if (error?.status === 400) {
+      return res.status(400).json({ error: error.message });
+    }
     if (error?.code === 11000) {
       return res.status(409).json({ error: "A student with this email already exists" });
     }
@@ -695,47 +1065,6 @@ router.put("/:studentId/ml-features", async (req, res) => {
   } catch (error) {
     console.error("❌ Error saving ml-features:", error);
     res.status(500).json({ error: "❌ Failed to save ml-features" });
-  }
-});
-
-// PUT - Assign mentors to old students without mentors
-router.put("/assign-old-mentors", async (req, res) => {
-  try {
-    const studentsWithoutMentor = await Student.find({ assignedMentorId: null });
-
-    let updatedStudents = [];
-
-    for (const student of studentsWithoutMentor) {
-      const mentors = await Mentor.find({
-        specialization: { $regex: new RegExp(student.courseApplied, "i") },
-        active: true,
-      });
-
-      if (mentors.length > 0) {
-        const lastIndex = mentorCounters[student.courseApplied] || -1;
-        const nextIndex = (lastIndex + 1) % mentors.length;
-        const assignedMentor = mentors[nextIndex];
-
-        mentorCounters[student.courseApplied] = nextIndex;
-
-        student.assignedMentorId = assignedMentor._id;
-        await student.save();
-
-        updatedStudents.push({
-          fullName: student.fullName,
-          courseApplied: student.courseApplied,
-          assignedMentor: `${assignedMentor.firstName} ${assignedMentor.lastName}`,
-        });
-      }
-    }
-
-    res.json({
-      message: "✅ Old students updated with mentors",
-      updatedStudents,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "❌ Failed to assign mentors to old students" });
   }
 });
 

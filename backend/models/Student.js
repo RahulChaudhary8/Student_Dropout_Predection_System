@@ -32,6 +32,8 @@ const studentSchema = new mongoose.Schema(
     // ---- Academic Information ----
     courseApplied: { type: String, required: true },
     branchSpecialization: { type: String },
+    academicYear: { type: Number, min: 1 },
+    semester: { type: Number, min: 1 },
     previousQualification: {
       type: String,
       enum: ["10th", "12th", "Diploma"],

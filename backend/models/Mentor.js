@@ -31,6 +31,7 @@ const mentorSchema = new mongoose.Schema({
         required: true,
       },
       branch: { type: String, required: true, trim: true },
+      period: { type: Number, min: 1 },
       subjects: { type: [String], default: [] },
     },
   ],

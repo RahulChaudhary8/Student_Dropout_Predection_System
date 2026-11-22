@@ -2,10 +2,16 @@ import express from "express";
 import mongoose from "mongoose";
 import Mentor from "../models/Mentor.js";
 import AcademicProgram from "../models/AcademicProgram.js";
+import Student from "../models/Student.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { verifyToken } from "../middleware/authMiddleware.js";
 import { requireRole } from "../middleware/roleMiddleware.js";
+import {
+  exactTextPattern,
+  findMentorsForStudentGroup,
+  selectMentorForStudentGroup,
+} from "../utils/mentorAssignment.js";
 
 const router = express.Router();
 let mentorCounter = 1; // server restart hone par reset hoga, DB se sync karna better hai
@@ -61,7 +67,7 @@ router.get("/", async (req, res) => {
   try {
     const mentors = await Mentor.find()
       .populate("assignedClasses")
-      .populate("subjectAssignments.courseId", "name branches");
+      .populate("subjectAssignments.courseId", "name branches studyMode periodCount");
     res.json(mentors);
   } catch (error) {
     res.status(500).json({ message: "Error fetching mentors", error });
@@ -135,11 +141,14 @@ router.patch(
   requireRole("admin"),
   async (req, res) => {
     try {
-      const { courseId, branch: branchName, subjects } = req.body;
+      const { courseId, branch: branchName, period, subjects } = req.body;
+      const hasPeriod = period !== undefined && period !== null && period !== "";
+      const normalizedPeriod = hasPeriod ? Number(period) : null;
       if (
         !mongoose.isValidObjectId(courseId) ||
         typeof branchName !== "string" ||
         !branchName.trim() ||
+        (hasPeriod && (!Number.isInteger(normalizedPeriod) || normalizedPeriod < 1)) ||
         !Array.isArray(subjects) ||
         subjects.some((subject) => typeof subject !== "string")
       ) {
@@ -152,6 +161,9 @@ router.patch(
       ]);
       if (!mentor) return res.status(404).json({ message: "Mentor not found" });
       if (!program) return res.status(404).json({ message: "Course not found" });
+      if (hasPeriod && normalizedPeriod > program.periodCount) {
+        return res.status(400).json({ message: "Period is outside this course's configured duration" });
+      }
 
       const branch = program.branches.find(
         (item) => item.name.toLowerCase() === branchName.trim().toLowerCase()
@@ -176,23 +188,189 @@ router.patch(
       mentor.subjectAssignments = mentor.subjectAssignments.filter(
         (assignment) =>
           String(assignment.courseId) !== String(program._id) ||
-          assignment.branch.toLowerCase() !== branch.name.toLowerCase()
+          assignment.branch.toLowerCase() !== branch.name.toLowerCase() ||
+          (hasPeriod
+            ? Number(assignment.period) !== normalizedPeriod
+            : assignment.period !== undefined && assignment.period !== null)
       );
       if (canonicalSubjects.length > 0) {
         mentor.subjectAssignments.push({
           courseId: program._id,
           branch: branch.name,
+          ...(hasPeriod ? { period: normalizedPeriod } : {}),
           subjects: canonicalSubjects,
         });
       }
       await mentor.save();
 
+      const studentFilter = {
+        courseApplied: exactTextPattern(program.name),
+        branchSpecialization: exactTextPattern(branch.name),
+      };
+      if (hasPeriod) {
+        studentFilter[program.studyMode === "semester" ? "semester" : "academicYear"] =
+          normalizedPeriod;
+      }
+      const studentAssignmentResult = canonicalSubjects.length && mentor.active
+        ? await Student.updateMany(
+            studentFilter,
+            { $set: { assignedMentorId: mentor._id } }
+          )
+        : { matchedCount: 0, modifiedCount: 0 };
       const updatedMentor = await Mentor.findById(mentor._id)
         .populate("assignedClasses")
-        .populate("subjectAssignments.courseId", "name branches");
-      res.json(updatedMentor);
+        .populate("subjectAssignments.courseId", "name branches studyMode periodCount");
+      res.json({
+        mentor: updatedMentor,
+        matchedStudentCount: studentAssignmentResult.matchedCount,
+        assignedStudentCount: studentAssignmentResult.modifiedCount,
+      });
     } catch (error) {
       res.status(500).json({ message: "Error assigning subjects", error: error.message });
+    }
+  }
+);
+
+router.patch(
+  "/:id/branch-assignments",
+  verifyToken,
+  requireRole("admin"),
+  async (req, res) => {
+    try {
+      const { courseId, branches } = req.body;
+      if (!mongoose.isValidObjectId(courseId) || !Array.isArray(branches) ||
+        branches.some((branch) => typeof branch !== "string")) {
+        return res.status(400).json({ message: "Valid course and branch list are required" });
+      }
+
+      const [mentor, program] = await Promise.all([
+        Mentor.findById(req.params.id),
+        AcademicProgram.findById(courseId),
+      ]);
+      if (!mentor) return res.status(404).json({ message: "Mentor not found" });
+      if (!program) return res.status(404).json({ message: "Course not found" });
+
+      const selectedBranches = [
+        ...new Map(
+          branches.map((name) => {
+            const branch = program.branches.find(
+              (item) => item.name.toLowerCase() === name.trim().toLowerCase()
+            );
+            return branch ? [branch.name.toLowerCase(), branch] : [name.trim().toLowerCase(), null];
+          })
+        ).values(),
+      ];
+      if (selectedBranches.some((branch) => !branch)) {
+        return res.status(400).json({ message: "One or more branches are not in this course" });
+      }
+
+      const courseAssignments = mentor.subjectAssignments.filter(
+        (assignment) => String(assignment.courseId) === String(program._id)
+      );
+      const selectedNames = new Set(
+        selectedBranches.map((branch) => branch.name.toLowerCase())
+      );
+      const removedAssignments = courseAssignments.filter(
+        (assignment) => !selectedNames.has(assignment.branch.toLowerCase())
+      );
+      const retainedAssignments = courseAssignments.filter(
+        (assignment) => selectedNames.has(assignment.branch.toLowerCase())
+      );
+      const newAssignments = selectedBranches
+        .filter(
+          (branch) =>
+            !retainedAssignments.some(
+              (assignment) =>
+                assignment.branch.toLowerCase() === branch.name.toLowerCase() &&
+                assignment.period == null
+            )
+        )
+        .map((branch) => ({
+          courseId: program._id,
+          branch: branch.name,
+          subjects: [],
+        }));
+      mentor.subjectAssignments = mentor.subjectAssignments.filter(
+        (assignment) => String(assignment.courseId) !== String(program._id)
+      );
+      mentor.subjectAssignments.push(...retainedAssignments, ...newAssignments);
+      await mentor.save();
+
+      let matchedStudentCount = 0;
+      let assignedStudentCount = 0;
+      if (mentor.active) {
+        for (const branch of selectedBranches) {
+          const students = await Student.find({
+              courseApplied: exactTextPattern(program.name),
+              branchSpecialization: exactTextPattern(branch.name),
+            });
+          matchedStudentCount += students.length;
+          const groups = new Map();
+          for (const student of students) {
+            const period =
+              program.studyMode === "semester" ? student.semester : student.academicYear;
+            const key = period ?? "";
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(student);
+          }
+          for (const [periodKey, group] of groups) {
+            const period = periodKey === "" ? null : Number(periodKey);
+            const candidates = await findMentorsForStudentGroup(
+              program.name,
+              branch.name,
+              period
+            );
+            const assignedMentor = selectMentorForStudentGroup(
+              program.name,
+              branch.name,
+              candidates,
+              period
+            );
+            if (!assignedMentor) continue;
+
+            const result = await Student.updateMany(
+              { _id: { $in: group.map((student) => student._id) } },
+              { $set: { assignedMentorId: assignedMentor._id } }
+            );
+            assignedStudentCount += result.modifiedCount;
+          }
+        }
+      }
+
+      for (const assignment of removedAssignments) {
+        const affectedStudents = await Student.find({
+          courseApplied: exactTextPattern(program.name),
+          branchSpecialization: exactTextPattern(assignment.branch),
+          assignedMentorId: mentor._id,
+        });
+        for (const student of affectedStudents) {
+          const alternatives = await findMentorsForStudentGroup(
+            student.courseApplied,
+            student.branchSpecialization,
+            student.academicYear ?? student.semester
+          );
+          const replacement = selectMentorForStudentGroup(
+            student.courseApplied,
+            student.branchSpecialization,
+            alternatives,
+            student.academicYear ?? student.semester
+          );
+          student.assignedMentorId = replacement?._id ?? null;
+          await student.save();
+        }
+      }
+
+      const updatedMentor = await Mentor.findById(mentor._id)
+        .populate("assignedClasses")
+        .populate("subjectAssignments.courseId", "name branches studyMode periodCount");
+      res.json({
+        mentor: updatedMentor,
+        matchedStudentCount,
+        assignedStudentCount,
+      });
+    } catch (error) {
+      console.error("Error updating mentor branch assignments:", error);
+      res.status(500).json({ message: "Failed to update mentor branch assignments" });
     }
   }
 );

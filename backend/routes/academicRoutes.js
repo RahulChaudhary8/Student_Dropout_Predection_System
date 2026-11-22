@@ -29,17 +29,102 @@ router.post("/", async (req, res) => {
   try {
     const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
     if (!name) return res.status(400).json({ message: "Course name is required" });
+    const studyMode = req.body.studyMode;
+    const periodCount = Number(req.body.periodCount);
+    if (
+      !["yearly", "semester"].includes(studyMode) ||
+      !Number.isInteger(periodCount) ||
+      periodCount < 1
+    ) {
+      return res.status(400).json({ message: "Select a valid study mode and period count" });
+    }
 
     const existing = await AcademicProgram.findOne({ name: matchesText(name) });
     if (existing) return res.status(409).json({ message: "This course already exists" });
 
-    const program = await AcademicProgram.create({ name });
+    const program = await AcademicProgram.create({ name, studyMode, periodCount });
     res.status(201).json(program);
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({ message: "This course already exists" });
     }
     res.status(500).json({ message: "Error adding course", error: error.message });
+  }
+});
+
+router.put("/:id", async (req, res) => {
+  try {
+    const { studyMode } = req.body;
+    const periodCount = Number(req.body.periodCount);
+    if (
+      !["yearly", "semester"].includes(studyMode) ||
+      !Number.isInteger(periodCount) ||
+      periodCount < 1
+    ) {
+      return res.status(400).json({ message: "Select a valid study mode and period count" });
+    }
+
+    const program = await AcademicProgram.findById(req.params.id);
+    if (!program) return res.status(404).json({ message: "Course not found" });
+
+    const modeChanged = program.studyMode !== studyMode;
+    const periodField = studyMode === "yearly" ? "academicYear" : "semester";
+    const overLimitFilter = {
+      courseApplied: matchesText(program.name),
+      [periodField]: { $gt: periodCount },
+    };
+    const [
+      hasAssignedPeriods,
+      hasOutOfRangeStudents,
+      hasPeriodAssignments,
+      hasOutOfRangeAssignments,
+    ] = await Promise.all([
+      modeChanged
+        ? Student.exists({
+            courseApplied: matchesText(program.name),
+            $or: [
+              { academicYear: { $exists: true, $ne: null } },
+              { semester: { $exists: true, $ne: null } },
+            ],
+          })
+        : false,
+      Student.exists(overLimitFilter),
+      modeChanged
+        ? Mentor.exists({
+            subjectAssignments: {
+              $elemMatch: {
+                courseId: program._id,
+                period: { $exists: true, $ne: null },
+              },
+            },
+          })
+        : false,
+      Mentor.exists({
+        subjectAssignments: {
+          $elemMatch: {
+            courseId: program._id,
+            period: { $gt: periodCount },
+          },
+        },
+      }),
+    ]);
+    if (hasAssignedPeriods || hasPeriodAssignments) {
+      return res.status(409).json({
+        message: "Clear or migrate student periods and mentor subject assignments before changing this course's study mode.",
+      });
+    }
+    if (hasOutOfRangeStudents || hasOutOfRangeAssignments) {
+      return res.status(409).json({
+        message: `Some students are above the new ${studyMode === "yearly" ? "year" : "semester"} count.`,
+      });
+    }
+
+    program.studyMode = studyMode;
+    program.periodCount = periodCount;
+    await program.save();
+    res.json(program);
+  } catch (error) {
+    res.status(500).json({ message: "Error updating course structure", error: error.message });
   }
 });
 

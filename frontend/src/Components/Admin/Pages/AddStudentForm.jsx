@@ -22,6 +22,7 @@ import AssignmentRoundedIcon from "@mui/icons-material/AssignmentRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import PublicRoundedIcon from "@mui/icons-material/PublicRounded";
+import { getMentorsForStudentGroup } from "../../../utils/mentorAssignments";
 
 // ---- Field definitions (key must match initialState) ----
 const sections = [
@@ -81,6 +82,9 @@ const sections = [
     fields: [
       { key: "courseApplied", label: "Course / Program Applied For", type: "text" },
       { key: "branchSpecialization", label: "Branch / Specialization", type: "text" },
+      { key: "academicYear", label: "Academic Year", type: "select" },
+      { key: "semester", label: "Semester", type: "select" },
+      { key: "assignedMentorId", label: "Assigned Mentor", type: "mentor" },
       {
         key: "previousQualification",
         label: "Previous Qualification",
@@ -169,21 +173,27 @@ const AddStudentForm = ({ onStudentAdded }) => {
   const [generatedPassword, setGeneratedPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [academicPrograms, setAcademicPrograms] = useState([]);
+  const [mentors, setMentors] = useState([]);
   const [academicCatalogError, setAcademicCatalogError] = useState("");
+  const [mentorLoadError, setMentorLoadError] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    fetch("http://localhost:5000/api/academics", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || "Could not load course catalog");
-        setAcademicPrograms(data);
+    axios
+      .get("http://localhost:5000/api/academics", {
+        headers: { Authorization: `Bearer ${token}` },
       })
+      .then((response) => setAcademicPrograms(response.data))
       .catch((error) => {
         console.error("Failed to load academic catalog:", error);
         setAcademicCatalogError("Course catalog could not be loaded. You can still enter course and branch manually.");
+      });
+    axios
+      .get("http://localhost:5000/api/mentors")
+      .then((response) => setMentors(response.data))
+      .catch((error) => {
+        console.error("Failed to load mentors:", error);
+        setMentorLoadError("Mentor list could not be loaded. You can still add a student and auto-assign a mentor.");
       });
   }, []);
 
@@ -192,7 +202,16 @@ const AddStudentForm = ({ onStudentAdded }) => {
     setStudentData((current) => ({
       ...current,
       [name]: value,
-      ...(name === "courseApplied" ? { branchSpecialization: "" } : {}),
+      ...(name === "courseApplied"
+        ? {
+            branchSpecialization: "",
+            academicYear: "",
+            semester: "",
+            assignedMentorId: "",
+          }
+        : name === "branchSpecialization" || name === "academicYear" || name === "semester"
+          ? { assignedMentorId: "" }
+          : {}),
     }));
   };
 
@@ -217,7 +236,7 @@ const AddStudentForm = ({ onStudentAdded }) => {
       );
 
       setGeneratedPassword(res.data.generatedPassword);
-      alert("✅ Student added successfully!");
+      alert(res.data.message || "✅ Student added successfully!");
 
       if (onStudentAdded) {
         onStudentAdded({ ...res.data.student, plainPassword: res.data.generatedPassword });
@@ -245,6 +264,9 @@ const AddStudentForm = ({ onStudentAdded }) => {
 
         {academicCatalogError && (
           <Alert severity="warning" sx={{ mb: 2 }}>{academicCatalogError}</Alert>
+        )}
+        {mentorLoadError && (
+          <Alert severity="warning" sx={{ mb: 2 }}>{mentorLoadError}</Alert>
         )}
 
         {generatedPassword && (
@@ -298,12 +320,40 @@ const AddStudentForm = ({ onStudentAdded }) => {
                         const isBranchField =
                           field.key === "branchSpecialization" &&
                           (selectedProgram?.branches.length || 0) > 0;
+                        const periodMode = selectedProgram?.studyMode || "yearly";
+                        const isYearField = field.key === "academicYear";
+                        const isSemesterField = field.key === "semester";
+                        const isPeriodField = isYearField || isSemesterField;
+                        if (
+                          (isPeriodField && !selectedProgram) ||
+                          (isYearField && periodMode !== "yearly") ||
+                          (isSemesterField && periodMode !== "semester")
+                        ) {
+                          return null;
+                        }
+                        const periodLabel = periodMode === "semester" ? "Semester" : "Academic Year";
+                        const periodOptions = Array.from(
+                          { length: selectedProgram?.periodCount || (periodMode === "semester" ? 8 : 4) },
+                          (_, index) => index + 1
+                        );
+                        const isMentorField = field.key === "assignedMentorId";
                         const academicOptions = isCourseField
                           ? academicPrograms.map((program) => program.name)
                           : isBranchField
                             ? selectedProgram.branches.map((branch) => branch.name)
                             : [];
-                        const isAcademicSelect = isCourseField || isBranchField;
+                        const matchingMentors = isMentorField
+                          ? getMentorsForStudentGroup(
+                              mentors,
+                                studentData.courseApplied,
+                                studentData.branchSpecialization,
+                                academicPrograms,
+                                selectedProgram?.studyMode === "semester"
+                                  ? studentData.semester
+                                  : studentData.academicYear
+                              )
+                          : [];
+                        const isAcademicSelect = isCourseField || isBranchField || isMentorField;
 
                         return (
                         <Box
@@ -314,7 +364,28 @@ const AddStudentForm = ({ onStudentAdded }) => {
                               : undefined
                           }
                         >
-                          {isAcademicSelect ? (
+                          {isPeriodField ? (
+                            <TextField
+                              select
+                              fullWidth
+                              size="medium"
+                              name={field.key}
+                              label={periodLabel}
+                              value={studentData[field.key]}
+                              onChange={handleChange}
+                              required
+                              InputLabelProps={{ shrink: true }}
+                            >
+                              <MenuItem value="">
+                                Select {periodMode === "semester" ? "semester" : "year"}
+                              </MenuItem>
+                              {periodOptions.map((option) => (
+                                <MenuItem key={option} value={String(option)}>
+                                  {periodLabel} {option}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          ) : isAcademicSelect ? (
                             <TextField
                               select
                               fullWidth
@@ -328,11 +399,24 @@ const AddStudentForm = ({ onStudentAdded }) => {
                               SelectProps={{ native: true }}
                             >
                               <option value="">
-                                {isCourseField ? "Select a course" : "Not provided"}
+                                {isCourseField
+                                  ? "Select a course"
+                                  : isMentorField
+                                    ? matchingMentors.length
+                                      ? "Auto assign based on course and branch"
+                                      : "No mentor assigned to this course and branch"
+                                    : "Not provided"}
                               </option>
-                              {academicOptions.map((option) => (
-                                <option key={option} value={option}>{option}</option>
-                              ))}
+                              {isMentorField && <option value="__NONE__">Do not assign</option>}
+                              {isMentorField
+                                ? matchingMentors.map((mentor) => (
+                                    <option key={mentor._id} value={mentor._id}>
+                                      {mentor.firstName} {mentor.lastName} ({mentor.mentorId})
+                                    </option>
+                                  ))
+                                : academicOptions.map((option) => (
+                                    <option key={option} value={option}>{option}</option>
+                                  ))}
                             </TextField>
                           ) : field.type === "select" ? (
                             <TextField
