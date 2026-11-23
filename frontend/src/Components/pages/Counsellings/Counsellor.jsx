@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -35,6 +35,10 @@ import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import SelfImprovementRoundedIcon from "@mui/icons-material/SelfImprovementRounded";
 import WorkRoundedIcon from "@mui/icons-material/WorkRounded";
 import SupportAgentRoundedIcon from "@mui/icons-material/SupportAgentRounded";
+import {
+  areSameCounsellingStudent,
+  getCounsellingStudentKey,
+} from "../../../utils/counselling";
 
 const suggestions = [
   {
@@ -70,24 +74,38 @@ function statusTone(status) {
   return "default";
 }
 
+const toCounsellorStudent = (student) => ({
+  ...student,
+  session: student.session || null,
+  status: student.status || "Pending",
+});
+
 const Counsellor = ({ students, goBack }) => {
-  const [updatedStudents, setUpdatedStudents] = useState(
-    students.map((s) => ({
-      ...s,
-      session: s.session || null,
-      status: s.status || "Pending",
-    }))
+  const [updatedStudents, setUpdatedStudents] = useState(() =>
+    students.map(toCounsellorStudent)
   );
 
-  const handleDateChange = (id, date) => {
+  useEffect(() => {
+    setUpdatedStudents(students.map(toCounsellorStudent));
+  }, [students]);
+
+  const handleDateChange = (student, date) => {
     setUpdatedStudents((prev) =>
-      prev.map((s) => (s.student_id === id ? { ...s, session: date } : s))
+      prev.map((currentStudent) =>
+        areSameCounsellingStudent(currentStudent, student)
+          ? { ...currentStudent, session: date }
+          : currentStudent
+      )
     );
   };
 
-  const handleStatusChange = (id, value) => {
+  const handleStatusChange = (student, value) => {
     setUpdatedStudents((prev) =>
-      prev.map((s) => (s.student_id === id ? { ...s, status: value } : s))
+      prev.map((currentStudent) =>
+        areSameCounsellingStudent(currentStudent, student)
+          ? { ...currentStudent, status: value }
+          : currentStudent
+      )
     );
   };
 
@@ -125,7 +143,9 @@ const Counsellor = ({ students, goBack }) => {
 
       setUpdatedStudents((prev) =>
         prev.map((s) =>
-          s.student_id === student.student_id ? { ...s, meet_link: meetLink } : s
+          areSameCounsellingStudent(s, student)
+            ? { ...s, meet_link: meetLink }
+            : s
         )
       );
 
@@ -193,19 +213,19 @@ const Counsellor = ({ students, goBack }) => {
                       <TableBody>
                         {counsellingStudents.map((s, i) => (
                           <TableRow
-                            key={i}
+                            key={getCounsellingStudentKey(s) || i}
                             hover
                             sx={{ "&:hover": { bgcolor: "rgba(37, 99, 235, 0.04)" } }}
                           >
-                            <TableCell>{s.studentId}</TableCell>
-                            <TableCell>{s.fullName}</TableCell>
+                            <TableCell>{s.studentId || s.student_id || s["Student ID"] || "N/A"}</TableCell>
+                            <TableCell>{s.fullName || s.name || "N/A"}</TableCell>
 
                             {/* Date & Time picker */}
                             <TableCell>
                               <DateTimePicker
                                 value={s.session ? dayjs(s.session) : null}
                                 onChange={(date) =>
-                                  handleDateChange(s.student_id, date ? date.toDate() : null)
+                                  handleDateChange(s, date ? date.toDate() : null)
                                 }
                                 ampm
                                 slotProps={{
@@ -226,9 +246,7 @@ const Counsellor = ({ students, goBack }) => {
                                   select
                                   size="small"
                                   value={s.status}
-                                  onChange={(e) =>
-                                    handleStatusChange(s.student_id, e.target.value)
-                                  }
+                                  onChange={(e) => handleStatusChange(s, e.target.value)}
                                   sx={{ minWidth: 130 }}
                                 >
                                   <MenuItem value="Pending">Pending</MenuItem>

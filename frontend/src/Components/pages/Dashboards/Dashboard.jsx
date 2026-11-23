@@ -69,6 +69,10 @@ import InboxRoundedIcon from "@mui/icons-material/InboxRounded";
 import PsychologyRoundedIcon from "@mui/icons-material/PsychologyRounded";
 import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import QuizManagement from "../Quiz/QuizManagement";
+import {
+  getCounsellingStudentKey,
+  normalizeCounsellingStudents,
+} from "../../../utils/counselling";
 
 const DRAWER_WIDTH = 230;
 
@@ -240,6 +244,7 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
   const [counsellingList, setCounsellingList] = useState([]);
+  const [counsellingListLoaded, setCounsellingListLoaded] = useState(false);
   const [fileName, setFileName] = useState("");
 
   useEffect(() => {
@@ -258,18 +263,22 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    const savedStudents = localStorage.getItem("students");
     const savedTab = localStorage.getItem("activeTab");
     const savedCounselling = localStorage.getItem("counsellingList");
 
     if (savedTab) setActiveTab(savedTab);
-    if (savedStudents) {
-      const parsed = JSON.parse(savedStudents);
-      setStudents(parsed);
-    }
     if (savedCounselling) {
-      setCounsellingList(JSON.parse(savedCounselling));
+      try {
+        const parsed = JSON.parse(savedCounselling);
+        if (Array.isArray(parsed)) {
+          setCounsellingList(normalizeCounsellingStudents(parsed));
+        }
+      } catch (error) {
+        console.error("Failed to load saved counselling students:", error);
+        localStorage.removeItem("counsellingList");
+      }
     }
+    setCounsellingListLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -279,10 +288,10 @@ const Dashboard = () => {
   }, [activeTab]);
 
   useEffect(() => {
-    if (counsellingList.length > 0) {
+    if (counsellingListLoaded) {
       localStorage.setItem("counsellingList", JSON.stringify(counsellingList));
     }
-  }, [counsellingList]);
+  }, [counsellingList, counsellingListLoaded]);
 
   const totals = useMemo(() => {
     const total = students.length;
@@ -489,21 +498,25 @@ const Dashboard = () => {
   };
 
   const handleMarkForCounselling = (student) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.student_id === student.student_id ? { ...s, marked: true } : s
-      )
-    );
+    const studentKey = getCounsellingStudentKey(student);
+    setStudents((prev) => {
+      const updated = prev.map((currentStudent) =>
+        studentKey && getCounsellingStudentKey(currentStudent) === studentKey
+          ? { ...currentStudent, marked: true }
+          : currentStudent
+      );
+      localStorage.setItem("students", JSON.stringify(updated));
+      return updated;
+    });
 
     setCounsellingList((prev) => {
-      if (prev.find((s) => s.student_id === student.student_id)) return prev;
-
-      const updated = [
-        ...prev,
-        { ...student, marked: true, status: "Pending", session: null },
-      ];
-      localStorage.setItem("counsellingList", JSON.stringify(updated));
-      return updated;
+      if (
+        studentKey &&
+        prev.some((currentStudent) => getCounsellingStudentKey(currentStudent) === studentKey)
+      ) {
+        return prev;
+      }
+      return [...prev, { ...student, marked: true, status: "Pending", session: null }];
     });
   };
 

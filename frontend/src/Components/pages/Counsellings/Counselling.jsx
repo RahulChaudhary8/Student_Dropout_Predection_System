@@ -32,6 +32,10 @@ import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import SelfImprovementRoundedIcon from "@mui/icons-material/SelfImprovementRounded";
 import WorkRoundedIcon from "@mui/icons-material/WorkRounded";
 import SupportAgentRoundedIcon from "@mui/icons-material/SupportAgentRounded";
+import {
+  areSameCounsellingStudent,
+  getCounsellingStudentKey,
+} from "../../../utils/counselling";
 
 const suggestions = [
   {
@@ -67,8 +71,23 @@ function statusTone(status) {
   return "default";
 }
 
+const toCounsellingStudent = (student) => ({
+  ...student,
+  session: student.session || null,
+  status: student.status || "Pending",
+  counsellingType: student.counsellingType || "",
+  mentor: student.mentor || "",
+});
+
 const Counselling = ({ students, goBack }) => {
   const [mentorsByType, setMentorsByType] = useState({});
+  const [updatedStudents, setUpdatedStudents] = useState(() =>
+    students.map(toCounsellingStudent)
+  );
+
+  useEffect(() => {
+    setUpdatedStudents(students.map(toCounsellingStudent));
+  }, [students]);
 
   useEffect(() => {
     axios
@@ -86,19 +105,13 @@ const Counselling = ({ students, goBack }) => {
       .catch((err) => console.error(err));
   }, []);
 
-  const [updatedStudents, setUpdatedStudents] = useState(
-    students.map((s) => ({
-      ...s,
-      session: s.session || null,
-      status: s.status || "Pending",
-      counsellingType: s.counsellingType || "",
-      mentor: s.mentor || "",
-    }))
-  );
-
-  const handleStatusChange = (id, value) => {
+  const handleStatusChange = (student, value) => {
     setUpdatedStudents((prev) =>
-      prev.map((s) => (s.student_id === id ? { ...s, status: value } : s))
+      prev.map((currentStudent) =>
+        areSameCounsellingStudent(currentStudent, student)
+          ? { ...currentStudent, status: value }
+          : currentStudent
+      )
     );
   };
 
@@ -187,12 +200,12 @@ const Counselling = ({ students, goBack }) => {
                     <TableBody>
                       {counsellingStudents.map((s, i) => (
                         <TableRow
-                          key={i}
+                          key={getCounsellingStudentKey(s) || i}
                           hover
                           sx={{ "&:hover": { bgcolor: "rgba(37, 99, 235, 0.04)" } }}
                         >
-                          <TableCell>{s.studentId}</TableCell>
-                          <TableCell>{s.fullName}</TableCell>
+                          <TableCell>{s.studentId || s.student_id || s["Student ID"] || "N/A"}</TableCell>
+                          <TableCell>{s.fullName || s.name || "N/A"}</TableCell>
 
                           {/* Counselling Type dropdown */}
                           <TableCell>
@@ -204,7 +217,7 @@ const Counselling = ({ students, goBack }) => {
                                 const type = e.target.value;
                                 setUpdatedStudents((prev) =>
                                   prev.map((st) =>
-                                    st.studentId === s.studentId
+                                    areSameCounsellingStudent(st, s)
                                       ? { ...st, counsellingType: type, mentor: "" }
                                       : st
                                   )
@@ -230,7 +243,7 @@ const Counselling = ({ students, goBack }) => {
                               onChange={(e) =>
                                 setUpdatedStudents((prev) =>
                                   prev.map((st) =>
-                                    st.studentId === s.studentId
+                                    areSameCounsellingStudent(st, s)
                                       ? { ...st, mentor: e.target.value }
                                       : st
                                   )
@@ -256,9 +269,7 @@ const Counselling = ({ students, goBack }) => {
                                 select
                                 size="small"
                                 value={s.status}
-                                onChange={(e) =>
-                                  handleStatusChange(s.student_id, e.target.value)
-                                }
+                                onChange={(e) => handleStatusChange(s, e.target.value)}
                                 sx={{ minWidth: 130 }}
                               >
                                 <MenuItem value="Pending">Pending</MenuItem>
