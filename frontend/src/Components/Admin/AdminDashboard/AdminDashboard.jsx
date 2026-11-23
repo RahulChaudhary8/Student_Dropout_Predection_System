@@ -44,6 +44,7 @@ import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import PendingActionsRoundedIcon from "@mui/icons-material/PendingActionsRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
+import EventNoteRoundedIcon from "@mui/icons-material/EventNoteRounded";
 
 import theme from "./theme";
 
@@ -52,6 +53,7 @@ import ManageMentors from "../Pages/ManageMentors";
 import ManageAcademics from "../Pages/ManageAcademics";
 import FeeManagement from "../Fee/FeeManagement";
 import AdminLeaveDashboard from "../Leave/AdminLeaveDashboard";
+import ManageTimetable from "../Pages/ManageTimetable";
 
 const DRAWER_WIDTH = 230;
 
@@ -61,6 +63,7 @@ const NAV_ITEMS = [
   { key: "mentors", label: "Manage Mentors", icon: <SupervisorAccountRoundedIcon /> },
   { key: "students", label: "Manage Students", icon: <SchoolRoundedIcon /> },
   { key: "academics", label: "Courses & Subjects", icon: <MenuBookRoundedIcon /> },
+  { key: "timetable", label: "Manage Timetable", icon: <EventNoteRoundedIcon /> },
   { key: "counselling", label: "Counselling", icon: <ForumRoundedIcon /> },
   { key: "leave", label: "Leave Management", icon: <EventBusyRoundedIcon /> },
 ];
@@ -468,6 +471,14 @@ export default function AdminDashboard() {
               <Fade in timeout={400}>
                 <Box>
                   <ManageAcademics />
+                </Box>
+              </Fade>
+            )}
+
+            {activeTab === "timetable" && (
+              <Fade in timeout={400}>
+                <Box>
+                  <ManageTimetable />
                 </Box>
               </Fade>
             )}

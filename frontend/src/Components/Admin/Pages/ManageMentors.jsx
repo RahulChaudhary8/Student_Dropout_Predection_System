@@ -292,8 +292,8 @@ export default function ManageMentors() {
                                     getAssignedCourseBranches(mentor.subjectAssignments).map(
                                       ({ courseName, branch }) => (
                                         <Chip
-                                          key={`${courseName}-${branch}`}
-                                          label={`${courseName} - ${branch}`}
+                                          key={`${courseName}::${branch || ""}`}
+                                          label={branch ? `${courseName} - ${branch}` : courseName}
                                           size="small"
                                         />
                                       )
@@ -307,8 +307,11 @@ export default function ManageMentors() {
                               </TableCell>
                               <TableCell>
                                 <Box className="flex flex-wrap gap-1" sx={{ maxWidth: 320 }}>
-                                  {mentor.subjectAssignments?.length > 0 ? (
-                                    mentor.subjectAssignments.map((assignment, index) => {
+                                  {mentor.subjectAssignments?.some(
+                                    (assignment) => assignment.subjects?.length > 0
+                                  ) ? (
+                                    mentor.subjectAssignments.flatMap((assignment) => {
+                                      if (!assignment.subjects?.length) return [];
                                       const course =
                                         typeof assignment.courseId === "object"
                                           ? assignment.courseId
@@ -317,13 +320,17 @@ export default function ManageMentors() {
                                       const periodName = assignment.period
                                         ? `${course?.studyMode === "semester" ? "Semester" : "Year"} ${assignment.period}`
                                         : "";
-                                      return (
-                                        <Chip
-                                          key={`${courseName}-${assignment.branch}-${index}`}
-                                          label={`${courseName} - ${assignment.branch}${periodName ? ` - ${periodName}` : ""}${assignment.subjects?.length ? `: ${assignment.subjects.join(", ")}` : ""}`}
-                                          size="small"
-                                        />
-                                      );
+                                      return assignment.subjects.map((subject, subjectIndex) => (
+                                        <Tooltip
+                                          key={`${courseName}-${assignment.branch}-${assignment.period || "all"}-${subject}-${subjectIndex}`}
+                                          title={`${courseName} - ${assignment.branch}${periodName ? ` - ${periodName}` : ""}`}
+                                        >
+                                          <Chip
+                                            label={`${periodName ? `${periodName}: ` : ""}${subject}`}
+                                            size="small"
+                                          />
+                                        </Tooltip>
+                                      ));
                                     })
                                   ) : (
                                     <Typography variant="body2" color="text.secondary">

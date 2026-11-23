@@ -20,6 +20,7 @@ import StudentAttendanceView from "../Attendance/StudentAttendanceView";
 import LeaveForm from "../LeaveForm/LeaveForm";
 import StudentNotifications from "../StudentNotification/StudentNotifications";
 import MentalHealthQuiz from "../Quiz/MentalHealthQuiz";
+import TimetableView from "../../Timetable/TimetableView";
 
 import {
   Box,
@@ -63,6 +64,7 @@ const NAV_ITEMS = [
   { key: "fees", label: "Fee Payment", icon: <PaymentsRoundedIcon /> },
   { key: "attendance", label: "View Attendance", icon: <EventNoteRoundedIcon /> },
   { key: "attendance-subject", label: "Subject-wise Attendance", icon: <EventNoteRoundedIcon /> },
+  { key: "timetable", label: "My Timetable", icon: <EventNoteRoundedIcon /> },
   { key: "leave", label: "Apply For Leave", icon: <EventBusyRoundedIcon /> },
   { key: "notification", label: "Notification", icon: <NotificationsRoundedIcon /> },
   { key: "quiz", label: "Mental Health Quiz", icon: <QuizRoundedIcon /> },
@@ -507,6 +509,14 @@ export default function StudentDashboard() {
             <Fade in timeout={400}>
               <Box>
                 <StudentAttendanceView studentId={student?.studentId} />  {/* ✅ new tab */}
+              </Box>
+            </Fade>
+          )}
+
+          {activeTab === "timetable" && (
+            <Fade in timeout={400}>
+              <Box>
+                <TimetableView title="My Class Timetable" />
               </Box>
             </Fade>
           )}

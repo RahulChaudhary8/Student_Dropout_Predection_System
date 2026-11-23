@@ -21,6 +21,7 @@ import leaveRoutes from "./routes/leaveRoutes.js";
 
 import classRoutes from "./routes/classRoutes.js";
 import academicRoutes from "./routes/academicRoutes.js";
+import timetableRoutes from "./routes/timetableRoutes.js";
 
 
 dotenv.config();
@@ -49,6 +50,7 @@ app.use("/api/leaves", leaveRoutes);
 app.use("/api/notes", notesRouter);
 app.use("/api/classes", classRoutes);
 app.use("/api/academics", academicRoutes);
+app.use("/api/timetable", timetableRoutes);
 
 
 // MongoDB connection with FrontendDb

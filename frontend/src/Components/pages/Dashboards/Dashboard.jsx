@@ -69,6 +69,7 @@ import InboxRoundedIcon from "@mui/icons-material/InboxRounded";
 import PsychologyRoundedIcon from "@mui/icons-material/PsychologyRounded";
 import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import QuizManagement from "../Quiz/QuizManagement";
+import TimetableView from "../../Timetable/TimetableView";
 import {
   getCounsellingStudentKey,
   normalizeCounsellingStudents,
@@ -80,6 +81,7 @@ const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: <SpaceDashboardRoundedIcon /> },
   { key: "counselling-dashboard", label: "Counselling", icon: <ForumRoundedIcon /> },
   { key: "students", label: "Students", icon: <SchoolRoundedIcon /> },
+  { key: "timetable", label: "My Timetable", icon: <EventNoteRoundedIcon /> },
   { key: "notepad", label: "Notepad", icon: <EditNoteRoundedIcon /> },
   { key: "attendances", label: "Attendances", icon: <EventNoteRoundedIcon /> },
   { key: "test-scores", label: "Test Scores", icon: <AssessmentRoundedIcon /> },
@@ -1209,6 +1211,14 @@ const Dashboard = () => {
                   students={counsellingList}
                   goBack={() => setActiveTab("counselling-dashboard")}
                 />
+              </Box>
+            </Fade>
+          )}
+
+          {activeTab === "timetable" && (
+            <Fade in timeout={400}>
+              <Box>
+                <TimetableView title="My Teaching Timetable" />
               </Box>
             </Fade>
           )}
