@@ -90,6 +90,42 @@ const Counselling = ({ students, goBack }) => {
   }, [students]);
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    Promise.all(
+      students.map((student) => {
+        const studentId = student.studentId || student.student_id;
+        if (!studentId) return Promise.resolve(null);
+        return axios
+          .get(`http://127.0.0.1:5000/api/interventions/student/${encodeURIComponent(studentId)}`, { headers })
+          .then((res) => ({ studentId, intervention: res.data }))
+          .catch(() => null);
+      })
+    ).then((records) => {
+      setUpdatedStudents((current) =>
+        current.map((student) => {
+          const studentId = student.studentId || student.student_id;
+          const record = records.find((item) => item?.studentId === studentId)?.intervention;
+          return record
+            ? {
+                ...student,
+                counsellingType: record.counsellingType || student.counsellingType,
+                mentor: record.counsellor || student.mentor,
+                status: record.status || student.status,
+                followUpDate: record.followUpDate || "",
+                outcome: record.outcome || "Pending",
+                notes: record.notes || "",
+                riskProbability: record.riskProbability,
+              }
+            : student;
+        })
+      );
+    });
+  }, [students]);
+
+  useEffect(() => {
     axios
       .get("http://127.0.0.1:5000/api/mentors")
       .then((res) => {
@@ -144,6 +180,49 @@ const Counselling = ({ students, goBack }) => {
     }
   };
 
+  const saveIntervention = async (student) => {
+    const studentId = student.studentId || student.student_id;
+    if (!studentId) {
+      alert("This student does not have a valid Student ID.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Your login session is missing. Please log in again.");
+      window.location.href = "/loginoptions";
+      return;
+    }
+
+    try {
+      await axios.post(
+        "http://127.0.0.1:5000/api/interventions",
+        {
+          studentId,
+          counsellingType: student.counsellingType,
+          counsellor: student.mentor,
+          status: student.status,
+          outcome: student.outcome || "Pending",
+          followUpDate: student.followUpDate || null,
+          notes: student.notes || "",
+          riskProbability: student.dropout_probability,
+        },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      alert("Intervention details saved successfully.");
+    } catch (error) {
+      console.error(error);
+      if (error?.response?.status === 401) {
+        alert("Your login session has expired. Please log in again.");
+        window.location.href = "/loginoptions";
+        return;
+      }
+      alert(error?.response?.data?.msg || "Failed to save intervention.");
+    }
+  };
+
   const counsellingStudents = updatedStudents.filter(
     (s) =>
       s.status === "Pending" ||
@@ -192,6 +271,9 @@ const Counselling = ({ students, goBack }) => {
                         <TableCell sx={{ fontWeight: 700 }}>Counselling Type</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>Counsellor</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Follow-up</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Outcome</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
                         <TableCell sx={{ fontWeight: 700 }} align="right">
                           Action
                         </TableCell>
@@ -285,9 +367,78 @@ const Counselling = ({ students, goBack }) => {
                             </Box>
                           </TableCell>
 
+                          <TableCell>
+                            <TextField
+                              type="date"
+                              size="small"
+                              value={
+                                s.followUpDate
+                                  ? new Date(s.followUpDate).toISOString().slice(0, 10)
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                setUpdatedStudents((prev) =>
+                                  prev.map((st) =>
+                                    areSameCounsellingStudent(st, s)
+                                      ? { ...st, followUpDate: e.target.value }
+                                      : st
+                                  )
+                                )
+                              }
+                              sx={{ minWidth: 150 }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              select
+                              size="small"
+                              value={s.outcome || "Pending"}
+                              onChange={(e) =>
+                                setUpdatedStudents((prev) =>
+                                  prev.map((st) =>
+                                    areSameCounsellingStudent(st, s)
+                                      ? { ...st, outcome: e.target.value }
+                                      : st
+                                  )
+                                )
+                              }
+                              sx={{ minWidth: 150 }}
+                            >
+                              {["Pending", "Improved", "Stable", "Needs Follow-up", "Referred"].map((value) => (
+                                <MenuItem key={value} value={value}>{value}</MenuItem>
+                              ))}
+                            </TextField>
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              multiline
+                              maxRows={2}
+                              value={s.notes || ""}
+                              onChange={(e) =>
+                                setUpdatedStudents((prev) =>
+                                  prev.map((st) =>
+                                    areSameCounsellingStudent(st, s)
+                                      ? { ...st, notes: e.target.value }
+                                      : st
+                                  )
+                                )
+                              }
+                              inputProps={{ maxLength: 2000 }}
+                              sx={{ minWidth: 190 }}
+                            />
+                          </TableCell>
+
                           {/* Notify / Join */}
                           <TableCell align="right">
                             <Box className="flex gap-1.5 justify-end">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => saveIntervention(s)}
+                              >
+                                Save
+                              </Button>
                               <Tooltip title="Notify Mentor">
                                 <Button
                                   size="small"
@@ -335,7 +486,7 @@ const Counselling = ({ students, goBack }) => {
                 </Typography>
                 <Grid container spacing={2.5}>
                   {suggestions.map((s, idx) => (
-                    <Grid item xs={12} sm={6} md={4} lg={true} key={s.title} sx={{ flexGrow: 1 }}>
+                    <Grid item xs={12} sm={6} md={4} key={s.title} sx={{ flexGrow: 1 }}>
                       <Grow in timeout={350 + idx * 120}>
                         <Card
                           elevation={0}

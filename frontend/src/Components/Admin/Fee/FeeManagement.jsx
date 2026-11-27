@@ -46,6 +46,7 @@ function statusTone(status) {
 const getTodayDate = () => new Date().toISOString().split("T")[0];
 const FeeManagement = () => {
   const [search, setSearch] = useState("");
+  const [historySearch, setHistorySearch] = useState("");
   const [students, setStudents] = useState([]);
   const [form, setForm] = useState({
     studentId: "",
@@ -55,6 +56,7 @@ const FeeManagement = () => {
     remarks: "",
   });
   const [paymentsHistory, setPaymentsHistory] = useState([]);
+  const [showAddPayment, setShowAddPayment] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const today = new Date();
 
@@ -94,6 +96,7 @@ const FeeManagement = () => {
       await axios.post("http://localhost:5000/api/payments", form);
       alert("Payment saved successfully!");
       setForm({ studentId: "", amount: "", date: getTodayDate(), mode: "", remarks: "" });
+      setShowAddPayment(false);
       fetchStudents();
       fetchPayments();
     } catch (error) {
@@ -102,18 +105,30 @@ const FeeManagement = () => {
     }
   };
 
-
+  const totalCollected = students.reduce(
+    (total, student) => total + Number(student.paidFees || 0),
+    0
+  );
+  const totalPending = students.reduce(
+    (total, student) =>
+      total +
+      Math.max(
+        Number(student.totalCourseFees || 0) - Number(student.paidFees || 0),
+        0
+      ),
+    0
+  );
 
   const summaryCards = [
     {
       label: "Total Collected",
-      value: `₹${students.reduce((acc, s) => acc + s.paidFees, 0)}`,
+      value: `₹${totalCollected.toLocaleString("en-IN")}`,
       icon: <AccountBalanceWalletRoundedIcon />,
       tone: "success",
     },
     {
-      label: "Pending Fees",
-      value: `₹${students.reduce((acc, s) => acc + (s.totalFees - s.paidFees), 0)}`,
+      label: "Total Pending Payment",
+      value: `₹${totalPending.toLocaleString("en-IN")}`,
       icon: <PendingActionsRoundedIcon />,
       tone: "warning",
     },
@@ -137,6 +152,18 @@ const FeeManagement = () => {
       s.studentId?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const filteredPayments = paymentsHistory.filter((payment) => {
+    const query = historySearch.trim().toLowerCase();
+    if (!query) return true;
+    return [
+      payment.studentId,
+      payment.amount,
+      payment.date,
+      payment.mode,
+      payment.remarks,
+    ].some((value) => String(value ?? "").toLowerCase().includes(query));
+  });
+
   return (
     <Fade in timeout={450}>
       <Box>
@@ -145,17 +172,26 @@ const FeeManagement = () => {
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             Fee Management
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<HistoryRoundedIcon />}
-            onClick={() => setShowHistory(true)}
-            className="transition-all duration-300"
-            sx={{
-              "&:hover": { transform: "translateY(-2px)", boxShadow: 4 },
-            }}
-          >
-            Payment History
-          </Button>
+          <Box className="flex gap-2">
+            <Button
+              variant="contained"
+              startIcon={<SaveRoundedIcon />}
+              onClick={() => setShowAddPayment(true)}
+              className="transition-all duration-300"
+              sx={{ "&:hover": { transform: "translateY(-2px)", boxShadow: 4 } }}
+            >
+              Add Payment
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<HistoryRoundedIcon />}
+              onClick={() => setShowHistory(true)}
+              className="transition-all duration-300"
+              sx={{ "&:hover": { transform: "translateY(-2px)", boxShadow: 4 } }}
+            >
+              Payment History
+            </Button>
+          </Box>
         </Box>
 
         {/* Summary Cards */}
@@ -250,7 +286,11 @@ const FeeManagement = () => {
                           <TableCell align="right">₹{student.totalCourseFees}</TableCell>
                           <TableCell align="right">₹{student.paidFees}</TableCell>
                           <TableCell align="right">
-                            ₹{student.totalCourseFees - student.paidFees}
+                            ₹{Math.max(
+                              Number(student.totalCourseFees || 0) -
+                                Number(student.paidFees || 0),
+                              0
+                            )}
                           </TableCell>
                           <TableCell>{student.dueDate?.slice(0, 10)}</TableCell>
                           <TableCell>
@@ -281,18 +321,23 @@ const FeeManagement = () => {
           </Card>
         </Grow>
 
-        {/* Add Payment Form */}
-        <Grow in timeout={650}>
-          <Card elevation={0} sx={{ border: "1px solid #e2e8f0" }}>
-            <CardContent>
-              <Typography variant="h6" className="mb-4">
-                Add Payment
-              </Typography>
-              <Box
-                component="form"
-                onSubmit={handlePayment}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-              >
+        <Dialog
+          open={showAddPayment}
+          onClose={() => setShowAddPayment(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle className="flex justify-between items-center">
+            <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
+              Add Payment
+            </Typography>
+            <IconButton onClick={() => setShowAddPayment(false)} size="small">
+              <CloseRoundedIcon />
+            </IconButton>
+          </DialogTitle>
+          <Box component="form" onSubmit={handlePayment} id="add-payment-form">
+            <DialogContent dividers>
+              <Box className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Autocomplete
                   options={students}
                   getOptionLabel={(option) => `${option.studentId} — ${option.fullName}`}
@@ -346,23 +391,24 @@ const FeeManagement = () => {
                   value={form.remarks}
                   onChange={(e) => setForm({ ...form, remarks: e.target.value })}
                   size="small"
+                  className="sm:col-span-2"
                 />
-                <Button
-                  type="submit"
-                  variant="contained"
-                  startIcon={<SaveRoundedIcon />}
-                  className="transition-all duration-300"
-                  sx={{
-                    height: 40,
-                    "&:hover": { transform: "translateY(-2px)", boxShadow: 4 },
-                  }}
-                >
-                  Save Payment
-                </Button>
               </Box>
-            </CardContent>
-          </Card>
-        </Grow>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, py: 2 }}>
+              <Button onClick={() => setShowAddPayment(false)} variant="outlined">
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                startIcon={<SaveRoundedIcon />}
+              >
+                Save Payment
+              </Button>
+            </DialogActions>
+          </Box>
+        </Dialog>
 
         {/* Payment History Dialog */}
         <Dialog
@@ -373,7 +419,7 @@ const FeeManagement = () => {
           TransitionComponent={Fade}
         >
           <DialogTitle className="flex justify-between items-center">
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
               Payment History
             </Typography>
             <IconButton onClick={() => setShowHistory(false)} size="small">
@@ -381,6 +427,21 @@ const FeeManagement = () => {
             </IconButton>
           </DialogTitle>
           <DialogContent dividers sx={{ maxHeight: 400 }}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search by student ID, amount, date, mode or remarks..."
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              sx={{ mb: 2 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRoundedIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
             <TableContainer>
               <Table size="small" stickyHeader>
                 <TableHead>
@@ -393,9 +454,9 @@ const FeeManagement = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {paymentsHistory.length > 0 ? (
-                    paymentsHistory.map((p, idx) => (
-                      <TableRow key={idx} hover>
+                  {filteredPayments.length > 0 ? (
+                    filteredPayments.map((p) => (
+                      <TableRow key={p._id} hover>
                         <TableCell>{p.studentId}</TableCell>
                         <TableCell>₹{p.amount}</TableCell>
                         <TableCell>{p.date?.slice(0, 10)}</TableCell>
@@ -406,7 +467,7 @@ const FeeManagement = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={5} align="center" sx={{ color: "text.secondary" }}>
-                        No payments yet
+                        {paymentsHistory.length ? "No matching payments found" : "No payments yet"}
                       </TableCell>
                     </TableRow>
                   )}

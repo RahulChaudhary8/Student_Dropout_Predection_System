@@ -89,6 +89,41 @@ const Counsellor = ({ students, goBack }) => {
     setUpdatedStudents(students.map(toCounsellorStudent));
   }, [students]);
 
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    Promise.all(
+      students.map((student) => {
+        const studentId = student.studentId || student.student_id;
+        if (!studentId) return Promise.resolve(null);
+        return axios
+          .get(`http://127.0.0.1:5000/api/interventions/student/${encodeURIComponent(studentId)}`, { headers })
+          .then((res) => ({ studentId, intervention: res.data }))
+          .catch(() => null);
+      })
+    ).then((records) => {
+      setUpdatedStudents((current) =>
+        current.map((student) => {
+          const studentId = student.studentId || student.student_id;
+          const record = records.find((item) => item?.studentId === studentId)?.intervention;
+          return record
+            ? {
+                ...student,
+                session: record.sessionDate || student.session,
+                status: record.status || student.status,
+                followUpDate: record.followUpDate || "",
+                outcome: record.outcome || "Pending",
+                notes: record.notes || "",
+                meet_link: record.meetLink || student.meet_link,
+              }
+            : student;
+        })
+      );
+    });
+  }, [students]);
+
   const handleDateChange = (student, date) => {
     setUpdatedStudents((prev) =>
       prev.map((currentStudent) =>
@@ -157,6 +192,49 @@ const Counsellor = ({ students, goBack }) => {
     }
   };
 
+  const saveIntervention = async (student) => {
+    const studentId = student.studentId || student.student_id;
+    if (!studentId) {
+      alert("This student does not have a valid Student ID.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Your login session is missing. Please log in again.");
+      window.location.href = "/loginoptions";
+      return;
+    }
+
+    try {
+      await axios.post(
+        "http://127.0.0.1:5000/api/interventions",
+        {
+          studentId,
+          sessionDate: student.session || null,
+          followUpDate: student.followUpDate || null,
+          status: student.status,
+          outcome: student.outcome || "Pending",
+          notes: student.notes || "",
+          meetLink: student.meet_link || "",
+          riskProbability: student.dropout_probability,
+        },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      alert("Intervention details saved successfully.");
+    } catch (error) {
+      console.error(error);
+      if (error?.response?.status === 401) {
+        alert("Your login session has expired. Please log in again.");
+        window.location.href = "/loginoptions";
+        return;
+      }
+      alert(error?.response?.data?.msg || "Failed to save intervention.");
+    }
+  };
+
   const counsellingStudents = updatedStudents.filter(
     (s) =>
       s.status === "Pending" ||
@@ -205,6 +283,9 @@ const Counsellor = ({ students, goBack }) => {
                           <TableCell sx={{ fontWeight: 700 }}>Student Name</TableCell>
                           <TableCell sx={{ fontWeight: 700 }}>Session Date</TableCell>
                           <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Follow-up</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Outcome</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
                           <TableCell sx={{ fontWeight: 700 }} align="right">
                             Action
                           </TableCell>
@@ -262,9 +343,78 @@ const Counsellor = ({ students, goBack }) => {
                               </Box>
                             </TableCell>
 
+                            <TableCell>
+                              <TextField
+                                type="date"
+                                size="small"
+                                value={
+                                  s.followUpDate
+                                    ? new Date(s.followUpDate).toISOString().slice(0, 10)
+                                    : ""
+                                }
+                                onChange={(e) =>
+                                  setUpdatedStudents((prev) =>
+                                    prev.map((st) =>
+                                      areSameCounsellingStudent(st, s)
+                                        ? { ...st, followUpDate: e.target.value }
+                                        : st
+                                    )
+                                  )
+                                }
+                                sx={{ minWidth: 150 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                select
+                                size="small"
+                                value={s.outcome || "Pending"}
+                                onChange={(e) =>
+                                  setUpdatedStudents((prev) =>
+                                    prev.map((st) =>
+                                      areSameCounsellingStudent(st, s)
+                                        ? { ...st, outcome: e.target.value }
+                                        : st
+                                    )
+                                  )
+                                }
+                                sx={{ minWidth: 150 }}
+                              >
+                                {["Pending", "Improved", "Stable", "Needs Follow-up", "Referred"].map((value) => (
+                                  <MenuItem key={value} value={value}>{value}</MenuItem>
+                                ))}
+                              </TextField>
+                            </TableCell>
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                multiline
+                                maxRows={2}
+                                value={s.notes || ""}
+                                onChange={(e) =>
+                                  setUpdatedStudents((prev) =>
+                                    prev.map((st) =>
+                                      areSameCounsellingStudent(st, s)
+                                        ? { ...st, notes: e.target.value }
+                                        : st
+                                    )
+                                  )
+                                }
+                                inputProps={{ maxLength: 2000 }}
+                                sx={{ minWidth: 190 }}
+                              />
+                            </TableCell>
+
                             {/* Notify / Join */}
                             <TableCell align="right">
                               <Box className="flex gap-1.5 justify-end">
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => saveIntervention(s)}
+                                >
+                                  Save
+                                </Button>
                                 <Tooltip title="Notify Student">
                                   <Button
                                     size="small"

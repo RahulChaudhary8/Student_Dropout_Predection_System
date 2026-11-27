@@ -25,6 +25,9 @@ export default function EditMentorBranchesDialog({ open, onClose, mentor, onSave
   const [programs, setPrograms] = useState([]);
   const [courseId, setCourseId] = useState("");
   const [selectedBranches, setSelectedBranches] = useState([]);
+  const [subjectBranch, setSubjectBranch] = useState("");
+  const [period, setPeriod] = useState("");
+  const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -51,6 +54,8 @@ export default function EditMentorBranchesDialog({ open, onClose, mentor, onSave
             ? currentCourseId
             : data[0]?._id || ""
         );
+        const currentBranch = mentor.subjectAssignments?.[0]?.branch || "";
+        setSubjectBranch(currentBranch);
       } catch (loadError) {
         setError(loadError.message);
       } finally {
@@ -75,6 +80,58 @@ export default function EditMentorBranchesDialog({ open, onClose, mentor, onSave
   }, [open, courseId, mentor]);
 
   const selectedProgram = programs.find((program) => program._id === courseId);
+  const periodLabel = selectedProgram?.studyMode === "semester" ? "Semester" : "Academic Year";
+  const periodCount = Number(selectedProgram?.periodCount || 0);
+  const selectedBranch = selectedProgram?.branches?.find(
+    (branch) => branch.name === subjectBranch
+  );
+  const availableSubjects = selectedBranch?.subjects || [];
+
+  useEffect(() => {
+    if (!selectedBranches.length) {
+      setSubjectBranch("");
+      return;
+    }
+    if (!selectedBranches.includes(subjectBranch)) {
+      setSubjectBranch(selectedBranches[0]);
+    }
+  }, [selectedBranches, subjectBranch]);
+
+  useEffect(() => {
+    if (!selectedProgram || !subjectBranch) {
+      setPeriod("");
+      setSelectedSubjects([]);
+      return;
+    }
+    const existing = mentor?.subjectAssignments?.find(
+      (assignment) =>
+        assignmentCourseId(assignment) === courseId &&
+        assignment.branch === subjectBranch &&
+        assignment.period != null
+    );
+    const nextPeriod =
+      existing && Number(existing.period) <= periodCount
+        ? String(existing.period)
+        : periodCount
+          ? "1"
+          : "";
+    setPeriod(nextPeriod);
+  }, [courseId, subjectBranch, selectedProgram, mentor, periodCount]);
+
+  useEffect(() => {
+    if (!courseId || !subjectBranch || !period) {
+      setSelectedSubjects([]);
+      return;
+    }
+    const existing = mentor?.subjectAssignments?.find(
+      (assignment) =>
+        assignmentCourseId(assignment) === courseId &&
+        assignment.branch === subjectBranch &&
+        Number(assignment.period) === Number(period)
+    );
+    setSelectedSubjects(existing?.subjects || []);
+  }, [courseId, subjectBranch, period, mentor]);
+
   const saveAssignments = async () => {
     if (!courseId) return;
     setSaving(true);
@@ -90,7 +147,33 @@ export default function EditMentorBranchesDialog({ open, onClose, mentor, onSave
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to update branches");
-      onSaved(data);
+
+      let savedResult = data;
+      if (subjectBranch && period) {
+        const subjectResponse = await fetch(
+          `${API}/mentors/${mentor._id}/subject-assignments`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            body: JSON.stringify({
+              courseId,
+              branch: subjectBranch,
+              period: Number(period),
+              subjects: selectedSubjects,
+            }),
+          }
+        );
+        const subjectData = await subjectResponse.json();
+        if (!subjectResponse.ok) {
+          throw new Error(subjectData.message || "Failed to update subjects");
+        }
+        savedResult = subjectData;
+      }
+
+      onSaved(savedResult);
       onClose();
     } catch (saveError) {
       setError(saveError.message);
@@ -128,7 +211,8 @@ export default function EditMentorBranchesDialog({ open, onClose, mentor, onSave
               </Select>
             </FormControl>
             {selectedProgram?.branches.length ? (
-              <FormControl fullWidth size="small">
+              <>
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
                 <InputLabel id="mentor-branch-select-label">Branches</InputLabel>
                 <Select
                   labelId="mentor-branch-select-label"
@@ -148,14 +232,74 @@ export default function EditMentorBranchesDialog({ open, onClose, mentor, onSave
                   ))}
                 </Select>
               </FormControl>
+                <FormControl fullWidth size="small" sx={{ mb: 2 }} disabled={!selectedBranches.length}>
+                  <InputLabel id="mentor-subject-branch-label">Subject Branch</InputLabel>
+                  <Select
+                    labelId="mentor-subject-branch-label"
+                    value={subjectBranch}
+                    label="Subject Branch"
+                    onChange={(event) => setSubjectBranch(event.target.value)}
+                  >
+                    {selectedBranches.map((branch) => (
+                      <MenuItem key={branch} value={branch}>{branch}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                  disabled={!periodCount || !subjectBranch}
+                >
+                  <InputLabel id="mentor-period-label">{periodLabel}</InputLabel>
+                  <Select
+                    labelId="mentor-period-label"
+                    value={period}
+                    label={periodLabel}
+                    onChange={(event) => setPeriod(event.target.value)}
+                  >
+                    {Array.from({ length: periodCount }, (_, index) => (
+                      <MenuItem key={index + 1} value={String(index + 1)}>
+                        {periodLabel} {index + 1}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {availableSubjects.length ? (
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="mentor-subject-select-label">Subjects</InputLabel>
+                    <Select
+                      labelId="mentor-subject-select-label"
+                      multiple
+                      value={selectedSubjects}
+                      label="Subjects"
+                      onChange={(event) => setSelectedSubjects(event.target.value)}
+                      renderValue={(subjects) =>
+                        subjects.length ? subjects.join(", ") : "Select subjects"
+                      }
+                    >
+                      {availableSubjects.map((subject) => (
+                        <MenuItem key={subject} value={subject}>
+                          <Checkbox checked={selectedSubjects.includes(subject)} />
+                          {subject}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : (
+                  <Typography color="text.secondary">
+                    Add subjects to the selected branch in Courses & Subjects first.
+                  </Typography>
+                )}
+              </>
             ) : (
               <Typography color="text.secondary">
                 No branches are configured for this course yet.
               </Typography>
             )}
             <Alert severity="info" sx={{ mt: 2 }}>
-              Existing subject selections are preserved. Selected branches are assigned to this mentor,
-              and matching students are updated.
+              Select the branches, then choose a branch, {periodLabel.toLowerCase()}, and subjects to
+              assign. Matching students are updated when assignments are saved.
             </Alert>
           </>
         )}

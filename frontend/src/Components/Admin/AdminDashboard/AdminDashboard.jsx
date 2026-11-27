@@ -54,6 +54,9 @@ import ManageAcademics from "../Pages/ManageAcademics";
 import FeeManagement from "../Fee/FeeManagement";
 import AdminLeaveDashboard from "../Leave/AdminLeaveDashboard";
 import ManageTimetable from "../Pages/ManageTimetable";
+import CounsellingDashboard from "../../pages/Counsellings/CounsellingDashboard";
+import Counselling from "../../pages/Counsellings/Counselling";
+import Counsellor from "../../pages/Counsellings/Counsellor";
 
 const DRAWER_WIDTH = 230;
 
@@ -68,15 +71,10 @@ const NAV_ITEMS = [
   { key: "leave", label: "Leave Management", icon: <EventBusyRoundedIcon /> },
 ];
 
-const highRiskStudents = [
-  { id: "STU101", name: "Rohan Verma", course: "B.Tech CSE", probability: 0.92 },
-  { id: "STU115", name: "Aditi Sharma", course: "MBA", probability: 0.87 },
-  { id: "STU130", name: "Arjun Singh", course: "B.Sc Physics", probability: 0.95 },
-];
-
 function riskTone(p) {
-  if (p >= 0.8) return { label: "High", color: "error" };
-  if (p >= 0.5) return { label: "Medium", color: "warning" };
+  const probability = p > 1 ? p : p * 100;
+  if (probability >= 70) return { label: "High", color: "error" };
+  if (probability >= 40) return { label: "Moderate", color: "warning" };
   return { label: "Low", color: "success" };
 }
 
@@ -85,6 +83,14 @@ export default function AdminDashboard() {
   const [students, setStudents] = useState([]);
   const [totalStudents, setTotalStudents] = useState(0);
   const [totalMentors, setTotalMentors] = useState(0);
+  const [academicPrograms, setAcademicPrograms] = useState([]);
+  const [interventionSummary, setInterventionSummary] = useState({
+    total: 0,
+    active: 0,
+    completed: 0,
+    followUpsDue: 0,
+  });
+  const [counsellingView, setCounsellingView] = useState("dashboard");
 
   const [anchorEl, setAnchorEl] = useState(null);
 
@@ -110,33 +116,92 @@ export default function AdminDashboard() {
 
 
   useEffect(() => {
-    axios
-      .get("http://localhost:5000/api/students")
-      .then((res) => setTotalStudents(res.data))
-      .catch((err) => console.error(err));
+    const token = localStorage.getItem("token");
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-    axios
-      .get("/api/mentors/count")
-      .then((res) => setTotalMentors(res.data.totalMentors || res.data.length || 0))
-      .catch((err) => console.error(err));
+    Promise.allSettled([
+      axios.get("http://localhost:5000/api/students"),
+      axios.get("http://localhost:5000/api/mentors/count"),
+      axios.get("http://localhost:5000/api/academics", { headers }),
+      axios.get("http://localhost:5000/api/interventions/summary", { headers }),
+    ])
+      .then(([studentsResult, mentorsResult, academicsResult, interventionsResult]) => {
+        if (studentsResult.status === "fulfilled") {
+          const studentList = Array.isArray(studentsResult.value.data)
+            ? studentsResult.value.data
+            : [];
+          setStudents(studentList);
+          setTotalStudents(studentList.length);
+        } else {
+          console.error("Failed to load students:", studentsResult.reason);
+        }
+
+        if (mentorsResult.status === "fulfilled") {
+          setTotalMentors(mentorsResult.value.data.totalMentors || 0);
+        } else {
+          console.error("Failed to load mentors:", mentorsResult.reason);
+        }
+
+        if (academicsResult.status === "fulfilled") {
+          setAcademicPrograms(
+            Array.isArray(academicsResult.value.data) ? academicsResult.value.data : []
+          );
+        } else {
+          console.error("Failed to load academic programs:", academicsResult.reason);
+        }
+
+        if (interventionsResult.status === "fulfilled") {
+          setInterventionSummary(interventionsResult.value.data);
+        } else {
+          console.error("Failed to load intervention summary:", interventionsResult.reason);
+        }
+      });
   }, []);
+
+  const highRiskStudents = students
+    .filter((student) =>
+      student.risk === "High" ||
+      Number(student.dropout_probability || 0) >= 70
+    )
+    .sort((a, b) =>
+      Number(b.dropout_probability || 0) - Number(a.dropout_probability || 0)
+    );
+
+  const atRiskCount = students.filter((student) =>
+    student.risk === "High" ||
+    student.risk === "Moderate" ||
+    Number(student.dropout_probability || 0) >= 40
+  ).length;
+
+  const predictedStudents = students.filter(
+    (student) => student.predictedAt || student.dropout_probability > 0
+  );
+  const dropoutPercentage = predictedStudents.length
+    ? (
+        (predictedStudents.filter((student) =>
+          student.risk === "High" ||
+          Number(student.dropout_probability || 0) >= 70
+        ).length / predictedStudents.length) *
+        100
+      ).toFixed(1)
+    : "0.0";
 
   const summaryCards = [
     {
       label: "Total Students",
-      value: students.length,
+      value: totalStudents,
       icon: <SchoolRoundedIcon />,
       tone: "primary",
     },
     {
       label: "Total Mentors",
-      value: 41,
+      value: totalMentors,
       icon: <GroupsRoundedIcon />,
       tone: "secondary",
     },
     {
-      label: "Pending Reports",
-      value: 8,
+      label: "At-Risk Students",
+      value: atRiskCount,
       icon: <PendingActionsRoundedIcon />,
       tone: "warning",
     },
@@ -370,9 +435,10 @@ export default function AdminDashboard() {
                                 </TableHead>
                                 <TableBody>
                                   {highRiskStudents.map((stu, idx) => {
-                                    const tone = riskTone(stu.probability);
+                                    const probability = Number(stu.dropout_probability || 0);
+                                    const tone = riskTone(probability);
                                     return (
-                                      <Fade in timeout={400 + idx * 120} key={stu.id}>
+                                      <Fade in timeout={400 + idx * 120} key={stu.studentId || stu._id || idx}>
                                         <TableRow
                                           hover
                                           className="transition-colors"
@@ -380,9 +446,9 @@ export default function AdminDashboard() {
                                             "&:hover": { bgcolor: "rgba(37, 99, 235, 0.04)" },
                                           }}
                                         >
-                                          <TableCell>{stu.id}</TableCell>
-                                          <TableCell>{stu.name}</TableCell>
-                                          <TableCell>{stu.course}</TableCell>
+                                          <TableCell>{stu.studentId || "N/A"}</TableCell>
+                                          <TableCell>{stu.fullName || stu.name || "Unknown"}</TableCell>
+                                          <TableCell>{stu.courseApplied || stu.course || "N/A"}</TableCell>
                                           <TableCell>
                                             <Chip
                                               label={tone.label}
@@ -398,12 +464,21 @@ export default function AdminDashboard() {
                                             />
                                           </TableCell>
                                           <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                            {(stu.probability * 100).toFixed(1)}%
+                                            {probability.toFixed(1)}%
                                           </TableCell>
                                         </TableRow>
                                       </Fade>
                                     );
                                   })}
+                                  {highRiskStudents.length === 0 && (
+                                    <TableRow>
+                                      <TableCell colSpan={5} align="center" sx={{ py: 5 }}>
+                                        <Typography color="text.secondary">
+                                          No high-risk students found.
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
                                 </TableBody>
                               </Table>
                             </TableContainer>
@@ -421,17 +496,25 @@ export default function AdminDashboard() {
                               Institute Summary
                             </Typography>
                             {[
-                              { label: "Total Departments", value: 4 },
-                              { label: "Semesters", value: 8 },
-                              { label: "Dropout Percentage", value: "2%" },
-                              { label: "Quick Filter", value: 2 },
+                              { label: "Courses / Programs", value: academicPrograms.length },
+                              {
+                                label: "Configured Periods",
+                                value: academicPrograms.reduce(
+                                  (total, program) => total + Number(program.periodCount || 0),
+                                  0
+                                ),
+                              },
+                              { label: "High-Risk Percentage", value: `${dropoutPercentage}%` },
+                              { label: "Predicted Students", value: predictedStudents.length },
+                              { label: "Active Interventions", value: interventionSummary.active },
+                              { label: "Follow-ups Due (7 Days)", value: interventionSummary.followUpsDue },
                             ].map((row, idx) => (
                               <Box key={row.label}>
                                 <Box className="flex justify-between items-center py-2.5">
                                   <Typography color="text.secondary">{row.label}</Typography>
                                   <Typography sx={{ fontWeight: 700 }}>{row.value}</Typography>
                                 </Box>
-                                {idx < 3 && <Divider />}
+                                {idx < 5 && <Divider />}
                               </Box>
                             ))}
                           </CardContent>
@@ -485,9 +568,22 @@ export default function AdminDashboard() {
 
             {activeTab === "counselling" && (
               <Fade in timeout={400}>
-                <Typography variant="h5" className="mt-4">
-                  Counselling Page Coming Soon...
-                </Typography>
+                {counsellingView === "dashboard" ? (
+                  <CounsellingDashboard
+                    onSelectCounselling={() => setCounsellingView("select")}
+                    onGiveCounselling={() => setCounsellingView("give")}
+                  />
+                ) : counsellingView === "select" ? (
+                  <Counselling
+                    students={highRiskStudents}
+                    goBack={() => setCounsellingView("dashboard")}
+                  />
+                ) : (
+                  <Counsellor
+                    students={highRiskStudents}
+                    goBack={() => setCounsellingView("dashboard")}
+                  />
+                )}
               </Fade>
             )}
 

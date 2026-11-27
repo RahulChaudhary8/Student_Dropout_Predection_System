@@ -120,7 +120,7 @@ const STUDENT_FIELDS = [
   { key: "annualFamilyIncome", label: "Annual Family Income", type: "number" },
   { key: "totalCourseFees", label: "Total Course Fees", type: "number" },
   { key: "feeStructure", label: "Fee Structure", type: "select", options: ["Semester-wise", "Yearly", "One-time"] },
-  { key: "scholarshipApplicable", label: "Scholarship Applicable", type: "select", options: ["Yes", "No"] },
+  { key: "scholarshipApplicable", label: "Scholarship Applicable", type: "select", options: ["Yes", "No"] }, 
   { key: "paymentMode", label: "Payment Mode", type: "select", options: ["Online", "Cash", "Cheque", "DD"] },
   { key: "nationality", label: "Nationality", type: "text" },
   { key: "religion", label: "Religion", type: "text" },
@@ -240,10 +240,10 @@ export default function ManageStudents({ isActiveTab }) {
     bulkUpdates.courseApplied ||
     (selectedStudentCourses.length === 1
       ? students.find(
-          (student) =>
-            selectedIds.includes(student._id) &&
-            String(student.courseApplied || "").trim().toLowerCase() === selectedStudentCourses[0]
-        )?.courseApplied
+        (student) =>
+          selectedIds.includes(student._id) &&
+          String(student.courseApplied || "").trim().toLowerCase() === selectedStudentCourses[0]
+      )?.courseApplied
       : "");
   const selectedBulkProgram = academicPrograms.find(
     (program) => program.name.toLowerCase() === String(bulkCourseName || "").toLowerCase()
@@ -253,16 +253,16 @@ export default function ManageStudents({ isActiveTab }) {
     : [...new Set(academicPrograms.flatMap((program) => program.branches.map((branch) => branch.name)))];
   const bulkMentorOptions = selectedBulkProgram
     ? getMentorsForStudentGroup(
-        mentors,
-        bulkCourseName,
-        bulkUpdates.branchSpecialization === "__NONE__"
-          ? ""
-          : bulkUpdates.branchSpecialization,
-        academicPrograms,
-        selectedBulkProgram.studyMode === "semester"
-          ? bulkUpdates.semester
-          : bulkUpdates.academicYear
-      )
+      mentors,
+      bulkCourseName,
+      bulkUpdates.branchSpecialization === "__NONE__"
+        ? ""
+        : bulkUpdates.branchSpecialization,
+      academicPrograms,
+      selectedBulkProgram.studyMode === "semester"
+        ? bulkUpdates.semester
+        : bulkUpdates.academicYear
+    )
     : mentors;
 
   const allFilteredSelected =
@@ -292,8 +292,8 @@ export default function ManageStudents({ isActiveTab }) {
       ...prev,
       [field]: value,
       ...(field === "branchSpecialization" ||
-      field === "academicYear" ||
-      field === "semester"
+        field === "academicYear" ||
+        field === "semester"
         ? { assignedMentorId: "" }
         : {}),
       ...(field === "academicYear" ? { semester: "__NONE__" } : {}),
@@ -427,9 +427,9 @@ export default function ManageStudents({ isActiveTab }) {
         .flatMap((row, index) =>
           failedIndexes.has(index)
             ? [{
-                ...row,
-                error: errors.find((item) => item.row === index + 2)?.error || "Could not save this row",
-              }]
+              ...row,
+              error: errors.find((item) => item.row === index + 2)?.error || "Could not save this row",
+            }]
             : []
         );
 
@@ -440,7 +440,7 @@ export default function ManageStudents({ isActiveTab }) {
         .flatMap(({ row, warnings }) => warnings.map((warning) => `Excel row ${row}: ${warning}`));
       const warningSummary = uploadWarnings.length
         ? `\n\nOptional values skipped:\n${uploadWarnings.slice(0, 5).join("\n")}` +
-          (uploadWarnings.length > 5 ? `\n...and ${uploadWarnings.length - 5} more warning(s)` : "")
+        (uploadWarnings.length > 5 ? `\n...and ${uploadWarnings.length - 5} more warning(s)` : "")
         : "";
 
       if (failedRows.length === 0) {
@@ -495,8 +495,8 @@ export default function ManageStudents({ isActiveTab }) {
             : key === "semester" && selectedProgram?.studyMode === "yearly"
               ? ""
               : key === "assignedMentorId"
-            ? student.assignedMentorId?._id || student.assignedMentorId || "__NONE__"
-            : student[key] ?? "",
+                ? student.assignedMentorId?._id || student.assignedMentorId || "__NONE__"
+                : student[key] ?? "",
         ])
       )
     );
@@ -579,14 +579,14 @@ export default function ManageStudents({ isActiveTab }) {
           const isMentorField = field.key === "assignedMentorId";
           const matchingMentors = isMentorField
             ? getMentorsForStudentGroup(
-                mentors,
-                  values.courseApplied,
-                  values.branchSpecialization,
-                  academicPrograms,
-                  selectedProgram?.studyMode === "semester"
-                    ? values.semester
-                    : values.academicYear
-              )
+              mentors,
+              values.courseApplied,
+              values.branchSpecialization,
+              academicPrograms,
+              selectedProgram?.studyMode === "semester"
+                ? values.semester
+                : values.academicYear
+            )
             : [];
           const currentMentor = isMentorField
             ? mentors.find((mentor) => mentor._id === String(values.assignedMentorId || ""))
@@ -626,16 +626,16 @@ export default function ManageStudents({ isActiveTab }) {
                   [field.key]: event.target.value,
                   ...(field.key === "courseApplied"
                     ? {
-                        branchSpecialization: "",
-                        academicYear: "",
-                        semester: "",
-                        assignedMentorId: "",
-                      }
+                      branchSpecialization: "",
+                      academicYear: "",
+                      semester: "",
+                      assignedMentorId: "",
+                    }
                     : field.key === "branchSpecialization"
                       ? { assignedMentorId: "" }
                       : field.key === "academicYear" || field.key === "semester"
                         ? { assignedMentorId: "" }
-                      : {}),
+                        : {}),
                 }))
               }
               size="small"
@@ -663,7 +663,6 @@ export default function ManageStudents({ isActiveTab }) {
                           ? "Auto assign by course and branch"
                           : "No mentor assigned to this course and branch"}
                     </option>
-                    <option value="__NONE__">Do not assign</option>
                     {mentorOptions.map((mentor) => (
                       <option
                         key={mentor._id}
@@ -1013,7 +1012,6 @@ export default function ManageStudents({ isActiveTab }) {
                 onChange={(e) => handleBulkCourseChange(e.target.value)}
                 size="small"
               >
-                <option value="">No change</option>
                 {academicPrograms.map((program) => (
                   <option key={program._id} value={program.name}>{program.name}</option>
                 ))}
@@ -1026,8 +1024,6 @@ export default function ManageStudents({ isActiveTab }) {
                 onChange={(e) => handleBulkFieldChange("branchSpecialization", e.target.value)}
                 size="small"
               >
-                <option value="">No change</option>
-                <option value="__NONE__">Clear branch</option>
                 {bulkBranchOptions.map((branch) => (
                   <option key={branch} value={branch}>{branch}</option>
                 ))}
@@ -1041,8 +1037,7 @@ export default function ManageStudents({ isActiveTab }) {
                   onChange={(e) => handleBulkFieldChange("academicYear", e.target.value)}
                   size="small"
                 >
-                  <option value="">No change</option>
-                  <option value="__NONE__">Clear year</option>
+
                   {Array.from(
                     { length: selectedBulkProgram.periodCount || 4 },
                     (_, index) => index + 1
@@ -1060,8 +1055,6 @@ export default function ManageStudents({ isActiveTab }) {
                   onChange={(e) => handleBulkFieldChange("semester", e.target.value)}
                   size="small"
                 >
-                  <option value="">No change</option>
-                  <option value="__NONE__">Clear semester</option>
                   {Array.from(
                     { length: selectedBulkProgram.periodCount || 8 },
                     (_, index) => index + 1
@@ -1104,7 +1097,6 @@ export default function ManageStudents({ isActiveTab }) {
                 onChange={(e) => handleBulkFieldChange("scholarshipApplicable", e.target.value)}
                 size="small"
               >
-                <MenuItem value="">No change</MenuItem>
                 <MenuItem value="Yes">Yes</MenuItem>
                 <MenuItem value="No">No</MenuItem>
               </TextField>
@@ -1115,7 +1107,6 @@ export default function ManageStudents({ isActiveTab }) {
                 onChange={(e) => handleBulkFieldChange("hostelRequired", e.target.value)}
                 size="small"
               >
-                <MenuItem value="">No change</MenuItem>
                 <MenuItem value="Yes">Yes</MenuItem>
                 <MenuItem value="No">No</MenuItem>
               </TextField>
@@ -1126,7 +1117,7 @@ export default function ManageStudents({ isActiveTab }) {
                 onChange={(e) => handleBulkFieldChange("transportRequired", e.target.value)}
                 size="small"
               >
-                <MenuItem value="">No change</MenuItem>
+
                 <MenuItem value="Yes">Yes</MenuItem>
                 <MenuItem value="No">No</MenuItem>
               </TextField>
@@ -1139,8 +1130,6 @@ export default function ManageStudents({ isActiveTab }) {
                 size="small"
                 sx={{ gridColumn: { sm: "1 / -1" } }}
               >
-                <option value="">No change</option>
-                <option value="__NONE__">Remove assigned mentor</option>
                 {bulkMentorOptions.map((mentor) => (
                   <option key={mentor._id} value={mentor._id}>
                     {mentor.firstName} {mentor.lastName} ({mentor.mentorId})

@@ -159,7 +159,6 @@ const AddMentorForm = ({ onMentorAdded }) => {
                     onChange={handleChange}
                     required
                   >
-                    <MenuItem value="">Select</MenuItem>
                     <MenuItem value="Academic">Academic</MenuItem>
                     <MenuItem value="Career-guidance">Career Guidance</MenuItem>
                     <MenuItem value="Financial">Financial</MenuItem>
