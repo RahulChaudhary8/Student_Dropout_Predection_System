@@ -13,6 +13,7 @@ import Notification from "../Notification/Notification";
 import SelectScore from "../Grades/SelectScore";
 import SemesterScore from "../Grades/SemesterScore";
 import ClassScore from "../Grades/ClassScore";
+import ResultManagement from "../Grades/ResultManagement";
 
 import {
   Box,
@@ -85,6 +86,7 @@ const NAV_ITEMS = [
   { key: "notepad", label: "Notepad", icon: <EditNoteRoundedIcon /> },
   { key: "attendances", label: "Attendances", icon: <EventNoteRoundedIcon /> },
   { key: "test-scores", label: "Test Scores", icon: <AssessmentRoundedIcon /> },
+  { key: "academic-results", label: "Academic Results", icon: <AssessmentRoundedIcon /> },
   { key: "notification", label: "Notification", icon: <NotificationsRoundedIcon /> },
   { key: "quiz-management", label: "Quiz Management", icon: <QuizRoundedIcon /> },
 ];
@@ -1246,6 +1248,14 @@ const Dashboard = () => {
                   onSelectClass={() => setActiveTab("class-score")}
                   onSelectSemester={() => setActiveTab("semester-score")}
                 />
+              </Box>
+            </Fade>
+          )}
+
+          {activeTab === "academic-results" && (
+            <Fade in timeout={400}>
+              <Box>
+                <ResultManagement />
               </Box>
             </Fade>
           )}

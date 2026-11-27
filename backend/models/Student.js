@@ -4,6 +4,20 @@ const studentSchema = new mongoose.Schema(
   {
     // ---- System-generated / internal fields ----
     studentId: { type: String, unique: true },
+    rollNumber: { type: String, trim: true },
+    registrationNumber: { type: String, trim: true },
+    academicHistory: {
+      type: [
+        {
+          courseApplied: String,
+          branchSpecialization: String,
+          period: Number,
+          studyMode: { type: String, enum: ["yearly", "semester"] },
+          promotedAt: Date,
+        },
+      ],
+      default: [],
+    },
 
     // ---- Basic Information ----
     fullName: { type: String, required: true },

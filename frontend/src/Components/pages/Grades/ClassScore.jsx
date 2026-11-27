@@ -38,9 +38,9 @@ const ClassScore = ({ students = [], goBack }) => {
   useEffect(() => {
     setScoreData(
       students.map((s) => ({
-        student_id: s.student_id,
-        name: s.name,
-        course: s.course,
+        studentId: s.studentId || s.student_id || "",
+        fullName: s.fullName || s.name || s.studentName || "",
+        course: s.courseApplied || s.course || "",
         marks: "",
       }))
     );
@@ -328,10 +328,10 @@ const ClassScore = ({ students = [], goBack }) => {
                             }}
                           >
                             <TableCell sx={{ fontSize: "0.82rem", color: "#64748b", py: 1 }}>
-                              {s.student_id || "-"}
+                              {s.studentId || "-"}
                             </TableCell>
                             <TableCell sx={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b", py: 1 }}>
-                              {s.name || "-"}
+                              {s.fullName || "-"}
                             </TableCell>
                             <TableCell sx={{ py: 1 }}>
                               <Chip

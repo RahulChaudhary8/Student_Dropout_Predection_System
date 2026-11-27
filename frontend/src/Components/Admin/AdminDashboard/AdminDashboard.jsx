@@ -57,6 +57,7 @@ import ManageTimetable from "../Pages/ManageTimetable";
 import CounsellingDashboard from "../../pages/Counsellings/CounsellingDashboard";
 import Counselling from "../../pages/Counsellings/Counselling";
 import Counsellor from "../../pages/Counsellings/Counsellor";
+import ResultManagement from "../../pages/Grades/ResultManagement";
 
 const DRAWER_WIDTH = 230;
 
@@ -67,6 +68,7 @@ const NAV_ITEMS = [
   { key: "students", label: "Manage Students", icon: <SchoolRoundedIcon /> },
   { key: "academics", label: "Courses & Subjects", icon: <MenuBookRoundedIcon /> },
   { key: "timetable", label: "Manage Timetable", icon: <EventNoteRoundedIcon /> },
+  { key: "results", label: "Academic Results", icon: <MenuBookRoundedIcon /> },
   { key: "counselling", label: "Counselling", icon: <ForumRoundedIcon /> },
   { key: "leave", label: "Leave Management", icon: <EventBusyRoundedIcon /> },
 ];
@@ -562,6 +564,14 @@ export default function AdminDashboard() {
               <Fade in timeout={400}>
                 <Box>
                   <ManageTimetable />
+                </Box>
+              </Fade>
+            )}
+
+            {activeTab === "results" && (
+              <Fade in timeout={400}>
+                <Box>
+                  <ResultManagement />
                 </Box>
               </Fade>
             )}
