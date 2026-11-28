@@ -100,6 +100,10 @@ const studentSchema = new mongoose.Schema(
       ref: "Mentor",
       default: null,
     },
+    assignedSubjects: {
+      type: [String],
+      default: [],
+    },
     attendance: { type: Number, default: 0 },
     testScore: { type: Number, default: 0 },
 

@@ -157,6 +157,7 @@ export default function ManageStudents({ isActiveTab }) {
   const [editingStudent, setEditingStudent] = useState(null);
   const [studentDraft, setStudentDraft] = useState({});
   const [studentSaving, setStudentSaving] = useState(false);
+  const [inlineSavingId, setInlineSavingId] = useState("");
   const [academicPrograms, setAcademicPrograms] = useState([]);
   const [academicCatalogError, setAcademicCatalogError] = useState("");
   const [mentorLoadError, setMentorLoadError] = useState("");
@@ -223,11 +224,16 @@ export default function ManageStudents({ isActiveTab }) {
     );
   };
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.courseApplied?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredStudents = students.filter((student) => {
+    const term = searchTerm.trim().toLowerCase();
+    return (
+      !term ||
+      student.fullName?.toLowerCase().includes(term) ||
+      student.studentId?.toLowerCase().includes(term) ||
+      student.courseApplied?.toLowerCase().includes(term) ||
+      student.branchSpecialization?.toLowerCase().includes(term)
+    );
+  });
   const selectedStudentCourses = [
     ...new Set(
       students
@@ -538,6 +544,31 @@ export default function ManageStudents({ isActiveTab }) {
       alert(`❌ ${err.response?.data?.error || "Failed to save student changes"}`);
     } finally {
       setStudentSaving(false);
+    }
+  };
+
+  const saveInlineStudentField = async (student, field, value) => {
+    setInlineSavingId(student._id);
+    try {
+      const updates = { [field]: value };
+      if (field === "courseApplied") {
+        const program = academicPrograms.find(
+          (item) => item.name.toLowerCase() === String(value || "").trim().toLowerCase()
+        );
+        updates.branchSpecialization = "";
+        updates.assignedMentorId = "__NONE__";
+        updates.academicYear = null;
+        updates.semester = null;
+        if (program?.studyMode === "semester") updates.semester = 1;
+        else if (program) updates.academicYear = 1;
+      }
+      await axios.put(`http://localhost:5000/api/students/${student._id}`, updates);
+      await fetchStudents();
+    } catch (err) {
+      console.error(`Could not update ${field}:`, err);
+      alert(`❌ ${err.response?.data?.error || "Could not update student field"}`);
+    } finally {
+      setInlineSavingId("");
     }
   };
 
@@ -892,7 +923,26 @@ export default function ManageStudents({ isActiveTab }) {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {filteredStudents.map((student) => (
+                          {filteredStudents.map((student) => {
+                            const inlineProgram = academicPrograms.find(
+                              (item) =>
+                                item.name.toLowerCase() ===
+                                String(student.courseApplied || "").trim().toLowerCase()
+                            );
+                            const inlineIsSemester = inlineProgram?.studyMode === "semester";
+                            const inlinePeriodCount = inlineProgram?.periodCount || (inlineIsSemester ? 8 : 4);
+                            const inlinePeriod = inlineIsSemester ? student.semester : student.academicYear;
+                            const inlineMentors = getMentorsForStudentGroup(
+                              mentors,
+                              student.courseApplied,
+                              student.branchSpecialization,
+                              academicPrograms,
+                              inlinePeriod
+                            );
+                            const inlineMentorId = String(
+                              student.assignedMentorId?._id || student.assignedMentorId || ""
+                            );
+                            return (
                             <TableRow
                               key={student.studentId}
                               hover
@@ -907,42 +957,60 @@ export default function ManageStudents({ isActiveTab }) {
                               </TableCell>
                               <TableCell>{student.studentId}</TableCell>
                               <TableCell>{student.fullName}</TableCell>
-                              <TableCell>{student.courseApplied}</TableCell>
-                              <TableCell>{student.branchSpecialization || "—"}</TableCell>
                               <TableCell>
-                                {(() => {
-                                  const program = academicPrograms.find(
-                                    (item) =>
-                                      item.name.toLowerCase() ===
-                                      String(student.courseApplied || "").trim().toLowerCase()
-                                  );
-                                  const isSemester = program?.studyMode === "semester";
-                                  const period = isSemester ? student.semester : student.academicYear;
-                                  return period
-                                    ? `${isSemester ? "Semester" : "Year"} ${period}`
-                                    : "—";
-                                })()}
+                                <TextField select size="small" value={student.courseApplied || ""}
+                                  disabled={inlineSavingId === student._id}
+                                  onChange={(event) => saveInlineStudentField(student, "courseApplied", event.target.value)}
+                                  SelectProps={{ native: true }} sx={{ minWidth: 120 }}>
+                                  <option value="">Select course</option>
+                                  {academicPrograms.map((program) => (
+                                    <option key={program._id} value={program.name}>{program.name}</option>
+                                  ))}
+                                </TextField>
+                              </TableCell>
+                              <TableCell>
+                                <TextField select size="small" value={student.branchSpecialization || ""}
+                                  disabled={!inlineProgram || inlineSavingId === student._id}
+                                  onChange={(event) => saveInlineStudentField(student, "branchSpecialization", event.target.value)}
+                                  SelectProps={{ native: true }} sx={{ minWidth: 130 }}>
+                                  <option value="">Select branch</option>
+                                  {inlineProgram?.branches.map((branch) => (
+                                    <option key={branch.name} value={branch.name}>{branch.name}</option>
+                                  ))}
+                                </TextField>
+                              </TableCell>
+                              <TableCell>
+                                <TextField select size="small" value={inlinePeriod ? String(inlinePeriod) : ""}
+                                  disabled={!inlineProgram || inlineSavingId === student._id}
+                                  onChange={(event) => saveInlineStudentField(
+                                    student,
+                                    inlineIsSemester ? "semester" : "academicYear",
+                                    event.target.value
+                                  )}
+                                  SelectProps={{ native: true }} sx={{ minWidth: 150 }}>
+                                  <option value="">Select {inlineIsSemester ? "semester" : "year"}</option>
+                                  {Array.from({ length: inlinePeriodCount }, (_, index) => index + 1).map((period) => (
+                                    <option key={period} value={String(period)}>
+                                      {inlineIsSemester ? "Semester" : "Year"} {period}
+                                    </option>
+                                  ))}
+                                </TextField>
                               </TableCell>
                               <TableCell>{student.yearOfAddmission}</TableCell>
                               <TableCell>{student.email}</TableCell>
                               <TableCell>{student.plainPassword}</TableCell>
                               <TableCell>
-                                {student.assignedMentorId ? (
-                                  <Chip
-                                    label={`${student.assignedMentorId.firstName} ${student.assignedMentorId.lastName}`}
-                                    size="small"
-                                    color="primary"
-                                    variant="outlined"
-                                    sx={{ fontWeight: 600 }}
-                                  />
-                                ) : (
-                                  <Chip
-                                    label="Not Assigned"
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ fontWeight: 600, color: "text.secondary" }}
-                                  />
-                                )}
+                                <TextField select size="small" value={inlineMentorId || "__NONE__"}
+                                  disabled={inlineSavingId === student._id}
+                                  onChange={(event) => saveInlineStudentField(student, "assignedMentorId", event.target.value)}
+                                  SelectProps={{ native: true }} sx={{ minWidth: 180 }}>
+                                  <option value="__NONE__">Not Assigned</option>
+                                  {inlineMentors.map((mentor) => (
+                                    <option key={mentor._id} value={mentor._id}>
+                                      {mentor.firstName} {mentor.lastName} ({mentor.mentorId})
+                                    </option>
+                                  ))}
+                                </TextField>
                               </TableCell>
                               <TableCell align="right">
                                 <Box className="flex gap-1 justify-end">
@@ -967,7 +1035,8 @@ export default function ManageStudents({ isActiveTab }) {
                                 </Box>
                               </TableCell>
                             </TableRow>
-                          ))}
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </TableContainer>

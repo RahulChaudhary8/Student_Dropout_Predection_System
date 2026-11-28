@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
   Box,
   Paper,
@@ -35,14 +36,19 @@ const SemesterScore = ({ students = [], goBack }) => {
   const [scoreData, setScoreData] = useState([]);
   const [selectedYear, setSelectedYear] = useState(1);
   const [selectedSem, setSelectedSem] = useState("Sem1");
+  const [academicPrograms, setAcademicPrograms] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setScoreData(
       students.map((s) => ({
-        studentId: s.studentId || s.studentId || "",
-        fullName: s.fullName || s.fullName || "",
-        courseApplied: s.courseApplied || s.courseApplied || "",
+        studentId: s.studentId || s.student_id || "",
+        fullName: s.fullName || s.name || s.studentName || "",
+        courseApplied: s.courseApplied || s.course || "",
+        branchSpecialization: s.branchSpecialization || s.branch || "",
         Sem1: s.Sem1 || "", Sem2: s.Sem2 || "",
         Sem3: s.Sem3 || "", Sem4: s.Sem4 || "",
         Sem5: s.Sem5 || "", Sem6: s.Sem6 || "",
@@ -51,10 +57,21 @@ const SemesterScore = ({ students = [], goBack }) => {
     );
   }, [students]);
 
-  const handleChange = (idx, sem, value) => {
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    axios
+      .get("http://localhost:5000/api/academics", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      .then((response) => setAcademicPrograms(response.data))
+      .catch((error) => console.error("Could not load academic options:", error));
+  }, []);
+
+  const handleChange = (studentId, sem, value) => {
     if (value === "" || /^[0-9]*\.?[0-9]*$/.test(value)) {
       const updated = [...scoreData];
-      updated[idx][sem] = value;
+      const scoreIndex = updated.findIndex((student) => student.studentId === studentId);
+      if (scoreIndex >= 0) updated[scoreIndex][sem] = value;
       setScoreData(updated);
     }
   };
@@ -66,14 +83,42 @@ const SemesterScore = ({ students = [], goBack }) => {
   };
 
   const handleSave = () => {
+    if (!selectedCourse || !selectedBranch || !selectedSubject) {
+      alert("Please select Course, Branch and Subject before saving.");
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
-    console.log("Saved:", scoreData);
+    console.log("Saved:", {
+      course: selectedCourse,
+      branch: selectedBranch,
+      subject: selectedSubject,
+      semester: selectedSem,
+      scores: visibleRows,
+    });
   };
 
+  const selectedProgram = academicPrograms.find(
+    (program) => program.name.toLowerCase() === selectedCourse.toLowerCase()
+  );
+  const branchOptions = selectedProgram?.branches || [];
+  const selectedBranchData = branchOptions.find(
+    (branch) => branch.name.toLowerCase() === selectedBranch.toLowerCase()
+  );
+  const subjectOptions = selectedBranchData?.subjects || [];
+  const visibleRows = scoreData.filter((student) => {
+    const courseMatches =
+      !selectedCourse ||
+      student.courseApplied.toLowerCase() === selectedCourse.toLowerCase();
+    const branchMatches =
+      !selectedBranch ||
+      student.branchSpecialization.toLowerCase() === selectedBranch.toLowerCase();
+    return courseMatches && branchMatches;
+  });
+
   // Progress
-  const filledCount = scoreData.filter((s) => s[selectedSem] !== "").length;
-  const progress = scoreData.length > 0 ? (filledCount / scoreData.length) * 100 : 0;
+  const filledCount = visibleRows.filter((s) => s[selectedSem] !== "").length;
+  const progress = visibleRows.length > 0 ? (filledCount / visibleRows.length) * 100 : 0;
 
   const getScoreChip = (marks) => {
     const v = parseFloat(marks);
@@ -218,6 +263,71 @@ const SemesterScore = ({ students = [], goBack }) => {
                 </ToggleButtonGroup>
               </Box>
 
+              {/* Course, Branch and Subject */}
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: "repeat(2, minmax(0, 1fr))",
+                    lg: "repeat(3, minmax(0, 1fr))",
+                  },
+                  gap: 1,
+                  minWidth: { lg: 620 },
+                }}
+              >
+                <TextField
+                  select
+                  size="small"
+                  label="Course"
+                  value={selectedCourse}
+                  onChange={(event) => {
+                    setSelectedCourse(event.target.value);
+                    setSelectedBranch("");
+                    setSelectedSubject("");
+                  }}
+                  SelectProps={{ native: true }}
+                >
+                  <option value="">All courses</option>
+                  {academicPrograms.map((program) => (
+                    <option key={program._id} value={program.name}>{program.name}</option>
+                  ))}
+                </TextField>
+
+                <TextField
+                  select
+                  size="small"
+                  label="Branch"
+                  value={selectedBranch}
+                  disabled={!selectedCourse}
+                  onChange={(event) => {
+                    setSelectedBranch(event.target.value);
+                    setSelectedSubject("");
+                  }}
+                  SelectProps={{ native: true }}
+                >
+                  <option value="">All branches</option>
+                  {branchOptions.map((branch) => (
+                    <option key={branch.name} value={branch.name}>{branch.name}</option>
+                  ))}
+                </TextField>
+
+                <TextField
+                  select
+                  size="small"
+                  label="Subject"
+                  value={selectedSubject}
+                  disabled={!selectedBranch}
+                  onChange={(event) => setSelectedSubject(event.target.value)}
+                  SelectProps={{ native: true }}
+                >
+                  <option value="">Select subject</option>
+                  {subjectOptions.map((subject) => (
+                    <option key={subject} value={subject}>{subject}</option>
+                  ))}
+                </TextField>
+              </Box>
+
               {/* Active badge */}
               <Box className="flex items-center gap-1 ml-auto">
                 <CalendarTodayIcon sx={{ fontSize: 14, color: "#94a3b8" }} />
@@ -240,7 +350,7 @@ const SemesterScore = ({ students = [], goBack }) => {
                 Enter Marks — {selectedSem}
               </Typography>
               <Typography variant="caption" sx={{ color: "#64748b" }}>
-                {filledCount} / {scoreData.length} filled
+                {filledCount} / {visibleRows.length} filled
               </Typography>
             </Box>
 
@@ -264,7 +374,14 @@ const SemesterScore = ({ students = [], goBack }) => {
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ backgroundColor: "#f1f5f9" }}>
-                    {["Student ID", "Name", "Course", `Marks (${selectedSem})`].map((h) => (
+                    {[
+                      "Student ID",
+                      "Name",
+                      "Course",
+                      "Branch",
+                      "Subject",
+                      `Marks (${selectedSem})`,
+                    ].map((h) => (
                       <TableCell
                         key={h}
                         sx={{ fontWeight: 700, color: "#334155", fontSize: "0.8rem", py: 1.5, borderBottom: "1.5px solid #e2e8f0" }}
@@ -276,14 +393,14 @@ const SemesterScore = ({ students = [], goBack }) => {
                 </TableHead>
 
                 <TableBody>
-                  {scoreData.length === 0 ? (
+                  {visibleRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} sx={{ textAlign: "center", py: 4, color: "#94a3b8", fontStyle: "italic" }}>
-                        No student records available.
+                      <TableCell colSpan={6} sx={{ textAlign: "center", py: 4, color: "#94a3b8", fontStyle: "italic" }}>
+                        No students match the selected Course and Branch.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    scoreData.map((s, idx) => {
+                    visibleRows.map((s, idx) => {
                       const chip = getScoreChip(s[selectedSem]);
                       return (
                         <TableRow
@@ -308,11 +425,25 @@ const SemesterScore = ({ students = [], goBack }) => {
                             />
                           </TableCell>
                           <TableCell sx={{ py: 1 }}>
+                            <Chip
+                              label={s.branchSpecialization || "-"}
+                              size="small"
+                              sx={{ backgroundColor: "#e0f2fe", color: "#0369a1", fontWeight: 600, fontSize: "0.72rem", height: 22 }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ py: 1 }}>
+                            <Chip
+                              label={selectedSubject || "-"}
+                              size="small"
+                              sx={{ backgroundColor: "#fef3c7", color: "#92400e", fontWeight: 600, fontSize: "0.72rem", height: 22 }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ py: 1 }}>
                             <Box className="flex items-center gap-2">
                               <TextField
                                 type="text"
                                 value={s[selectedSem]}
-                                onChange={(e) => handleChange(idx, selectedSem, e.target.value)}
+                                onChange={(e) => handleChange(s.studentId, selectedSem, e.target.value)}
                                 placeholder="—"
                                 size="small"
                                 inputProps={{ inputMode: "decimal" }}

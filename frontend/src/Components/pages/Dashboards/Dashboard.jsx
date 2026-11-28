@@ -14,6 +14,7 @@ import SelectScore from "../Grades/SelectScore";
 import SemesterScore from "../Grades/SemesterScore";
 import ClassScore from "../Grades/ClassScore";
 import ResultManagement from "../Grades/ResultManagement";
+import PromotionManagement from "../Grades/PromotionManagement";
 
 import {
   Box,
@@ -87,6 +88,7 @@ const NAV_ITEMS = [
   { key: "attendances", label: "Attendances", icon: <EventNoteRoundedIcon /> },
   { key: "test-scores", label: "Test Scores", icon: <AssessmentRoundedIcon /> },
   { key: "academic-results", label: "Academic Results", icon: <AssessmentRoundedIcon /> },
+  { key: "promotions", label: "Promotions", icon: <AssessmentRoundedIcon /> },
   { key: "notification", label: "Notification", icon: <NotificationsRoundedIcon /> },
   { key: "quiz-management", label: "Quiz Management", icon: <QuizRoundedIcon /> },
 ];
@@ -1256,6 +1258,14 @@ const Dashboard = () => {
             <Fade in timeout={400}>
               <Box>
                 <ResultManagement />
+              </Box>
+            </Fade>
+          )}
+
+          {activeTab === "promotions" && (
+            <Fade in timeout={400}>
+              <Box>
+                <PromotionManagement />
               </Box>
             </Fade>
           )}

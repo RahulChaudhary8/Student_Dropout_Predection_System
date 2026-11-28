@@ -214,9 +214,25 @@ router.patch(
       const studentAssignmentResult = canonicalSubjects.length && mentor.active
         ? await Student.updateMany(
             studentFilter,
-            { $set: { assignedMentorId: mentor._id } }
+            {
+              $set: {
+                assignedMentorId: mentor._id,
+                assignedSubjects: canonicalSubjects,
+              },
+            }
           )
-        : { matchedCount: 0, modifiedCount: 0 };
+        : await Student.updateMany(
+            {
+              ...studentFilter,
+              assignedMentorId: mentor._id,
+            },
+            {
+              $set: {
+                assignedMentorId: null,
+                assignedSubjects: [],
+              },
+            }
+          );
       const updatedMentor = await Mentor.findById(mentor._id)
         .populate("assignedClasses")
         .populate("subjectAssignments.courseId", "name branches studyMode periodCount");
