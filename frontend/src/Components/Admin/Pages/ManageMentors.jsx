@@ -17,6 +17,12 @@ import {
   Chip,
   Button,
   IconButton,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Checkbox,
+  Alert,
   Tooltip,
   Fade,
   Grow,
@@ -29,22 +35,22 @@ import ToggleOnRoundedIcon from "@mui/icons-material/ToggleOnRounded";
 import ToggleOffRoundedIcon from "@mui/icons-material/ToggleOffRounded";
 import InboxRoundedIcon from "@mui/icons-material/InboxRounded";
 
-const getAssignedCourseBranches = (assignments = []) => [
-  ...new Map(
-    assignments.map((assignment) => {
-      const courseName =
-        typeof assignment.courseId === "object" ? assignment.courseId?.name || "Course" : "Course";
-      const key = `${courseName}::${assignment.branch}`;
-      return [key, { courseName, branch: assignment.branch }];
-    })
-  ).values(),
-];
+const getCourseId = (assignment) =>
+  String(assignment.courseId?._id || assignment.courseId || "");
+const getClassKey = (courseId, branch) => JSON.stringify([courseId, branch]);
+const getSubjectKey = (courseId, branch, period, subject) =>
+  JSON.stringify([courseId, branch, period ?? null, subject]);
+const parseKey = (key) => JSON.parse(key);
 
 export default function ManageMentors() {
   const [activeSection, setActiveSection] = useState("table");
   const [mentors, setMentors] = useState([]);
   const [branchDialogOpen, setBranchDialogOpen] = useState(false);
   const [selectedMentor, setSelectedMentor] = useState(null);
+  const [academicPrograms, setAcademicPrograms] = useState([]);
+  const [assignmentDrafts, setAssignmentDrafts] = useState({});
+  const [savingAssignmentsId, setSavingAssignmentsId] = useState("");
+  const [assignmentError, setAssignmentError] = useState("");
 
   const handleAddMentor = () => {
     setActiveSection("addMentor");
@@ -113,6 +119,123 @@ export default function ManageMentors() {
     );
   };
 
+  const getAssignmentValues = (mentor) => {
+    const assignments = mentor.subjectAssignments || [];
+    return {
+      classes: [
+        ...new Set(
+          assignments.map((assignment) =>
+            getClassKey(getCourseId(assignment), assignment.branch)
+          )
+        ),
+      ],
+      subjects: [
+        ...new Set(
+          assignments.flatMap((assignment) =>
+            (assignment.subjects || []).map((subject) =>
+              getSubjectKey(
+                getCourseId(assignment),
+                assignment.branch,
+                assignment.period,
+                subject
+              )
+            )
+          )
+        ),
+      ],
+    };
+  };
+
+  const updateAssignmentDraft = (mentor, field, values) => {
+    setAssignmentDrafts((current) => {
+      const currentValues = current[mentor._id] || getAssignmentValues(mentor);
+      if (field === "classes") {
+        const selected = new Set(values);
+        return {
+          ...current,
+          [mentor._id]: {
+            ...currentValues,
+            classes: values,
+            subjects: currentValues.subjects.filter((key) => {
+              const [courseId, branch] = parseKey(key);
+              return selected.has(getClassKey(courseId, branch));
+            }),
+          },
+        };
+      }
+      return {
+        ...current,
+        [mentor._id]: { ...currentValues, [field]: values },
+      };
+    });
+  };
+
+  const saveMentorAssignments = async (mentor) => {
+    const values = assignmentDrafts[mentor._id] || getAssignmentValues(mentor);
+    const classes = new Map(
+      values.classes.map((key) => {
+        const [courseId, branch] = parseKey(key);
+        return [key, { courseId, branch }];
+      })
+    );
+    const grouped = new Map();
+    for (const classKey of classes.keys()) {
+      const { courseId, branch } = classes.get(classKey);
+      grouped.set(getSubjectKey(courseId, branch, null, ""), {
+        courseId,
+        branch,
+        period: null,
+        subjects: [],
+      });
+    }
+
+    for (const key of values.subjects) {
+      const [courseId, branch, period, subject] = parseKey(key);
+      if (!classes.has(getClassKey(courseId, branch))) continue;
+      const groupKey = getSubjectKey(courseId, branch, period, "");
+      if (!grouped.has(groupKey)) {
+        grouped.set(groupKey, { courseId, branch, period, subjects: [] });
+      }
+      grouped.get(groupKey).subjects.push(subject);
+    }
+
+    setSavingAssignmentsId(mentor._id);
+    setAssignmentError("");
+    try {
+      const response = await fetch(`http://localhost:5000/api/mentors/${mentor._id}/assignments`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ assignments: [...grouped.values()] }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Could not save mentor assignments");
+      setMentors((current) =>
+        current.map((item) =>
+          item._id === mentor._id
+            ? {
+                ...item,
+                subjectAssignments: result.mentor.subjectAssignments,
+                assignedClasses: result.mentor.assignedClasses || [],
+              }
+            : item
+        )
+      );
+      setAssignmentDrafts((current) => {
+        const next = { ...current };
+        delete next[mentor._id];
+        return next;
+      });
+    } catch (error) {
+      console.error("Could not save mentor assignments:", error);
+      setAssignmentError(error.message);
+    } finally {
+      setSavingAssignmentsId("");
+    }
+  };
+
   useEffect(() => {
     const fetchMentors = async () => {
       try {
@@ -136,6 +259,19 @@ export default function ManageMentors() {
       }
     };
     fetchMentors();
+
+    fetch("http://localhost:5000/api/academics", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Could not load academic courses");
+        setAcademicPrograms(data);
+      })
+      .catch((error) => {
+        console.error("Could not load academic courses for mentor assignments:", error);
+        setAssignmentError(error.message);
+      });
   }, []);
 
   return (
@@ -226,6 +362,11 @@ export default function ManageMentors() {
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
                 All Mentors
               </Typography>
+              {assignmentError && (
+                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setAssignmentError("")}>
+                  {assignmentError}
+                </Alert>
+              )}
 
               {mentors.length === 0 ? (
                 <Grow in timeout={400}>
@@ -275,7 +416,43 @@ export default function ManageMentors() {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {mentors.map((mentor) => (
+                          {mentors.map((mentor) => {
+                            const currentValues = getAssignmentValues(mentor);
+                            const values = assignmentDrafts[mentor._id] || currentValues;
+                            const classOptions = academicPrograms.flatMap((program) =>
+                              (program.branches || []).map((branch) => ({
+                                key: getClassKey(program._id, branch.name),
+                                label: `${program.name} - ${branch.name}`,
+                              }))
+                            );
+                            const subjectOptions = values.classes.flatMap((classKey) => {
+                              const [courseId, branchName] = parseKey(classKey);
+                              const program = academicPrograms.find((item) => item._id === courseId);
+                              const branch = program?.branches?.find((item) => item.name === branchName);
+                              if (!program || !branch) return [];
+                              const periods = [
+                                null,
+                                ...Array.from({ length: Number(program.periodCount || 0) }, (_, index) => index + 1),
+                              ];
+                              return periods.flatMap((period) =>
+                                (branch.subjects || []).map((subject) => {
+                                  const key = getSubjectKey(courseId, branchName, period, subject);
+                                  const periodLabel = period == null
+                                    ? "All periods"
+                                    : `${program.studyMode === "semester" ? "Semester" : "Year"} ${period}`;
+                                  return {
+                                    key,
+                                    label: `${program.name} - ${branchName} - ${periodLabel}: ${subject}`,
+                                  };
+                                })
+                              );
+                            });
+                            const hasChanges =
+                              JSON.stringify([...values.classes].sort()) !==
+                                JSON.stringify([...currentValues.classes].sort()) ||
+                              JSON.stringify([...values.subjects].sort()) !==
+                                JSON.stringify([...currentValues.subjects].sort());
+                            return (
                             <TableRow
                               key={mentor._id}
                               hover
@@ -287,57 +464,60 @@ export default function ManageMentors() {
                               <TableCell>{mentor.experience}</TableCell>
                               <TableCell>{mentor.plainPassword}</TableCell>
                               <TableCell>
-                                <Box className="flex flex-wrap gap-1" sx={{ maxWidth: 220 }}>
-                                  {getAssignedCourseBranches(mentor.subjectAssignments).length > 0 ? (
-                                    getAssignedCourseBranches(mentor.subjectAssignments).map(
-                                      ({ courseName, branch }) => (
-                                        <Chip
-                                          key={`${courseName}::${branch || ""}`}
-                                          label={branch ? `${courseName} - ${branch}` : courseName}
-                                          size="small"
-                                        />
-                                      )
-                                    )
-                                  ) : (
-                                    <Typography variant="body2" color="text.secondary">
-                                      Not assigned
-                                    </Typography>
-                                  )}
-                                </Box>
+                                <FormControl size="small" sx={{ minWidth: 240, maxWidth: 300 }}>
+                                  <InputLabel id={`mentor-classes-${mentor._id}`}>Classes</InputLabel>
+                                  <Select
+                                    labelId={`mentor-classes-${mentor._id}`}
+                                    multiple
+                                    value={values.classes}
+                                    label="Classes"
+                                    disabled={savingAssignmentsId === mentor._id}
+                                    onChange={(event) =>
+                                      updateAssignmentDraft(mentor, "classes", event.target.value)
+                                    }
+                                    renderValue={(selected) =>
+                                      selected
+                                        .map((key) => classOptions.find((option) => option.key === key)?.label || "")
+                                        .filter(Boolean)
+                                        .join(", ") || "Select classes"
+                                    }
+                                  >
+                                    {classOptions.map((option) => (
+                                      <MenuItem key={option.key} value={option.key}>
+                                        <Checkbox checked={values.classes.includes(option.key)} />
+                                        {option.label}
+                                      </MenuItem>
+                                    ))}
+                                  </Select>
+                                </FormControl>
                               </TableCell>
                               <TableCell>
-                                <Box className="flex flex-wrap gap-1" sx={{ maxWidth: 320 }}>
-                                  {mentor.subjectAssignments?.some(
-                                    (assignment) => assignment.subjects?.length > 0
-                                  ) ? (
-                                    mentor.subjectAssignments.flatMap((assignment) => {
-                                      if (!assignment.subjects?.length) return [];
-                                      const course =
-                                        typeof assignment.courseId === "object"
-                                          ? assignment.courseId
-                                          : null;
-                                      const courseName = course?.name || "Course";
-                                      const periodName = assignment.period
-                                        ? `${course?.studyMode === "semester" ? "Semester" : "Year"} ${assignment.period}`
-                                        : "";
-                                      return assignment.subjects.map((subject, subjectIndex) => (
-                                        <Tooltip
-                                          key={`${courseName}-${assignment.branch}-${assignment.period || "all"}-${subject}-${subjectIndex}`}
-                                          title={`${courseName} - ${assignment.branch}${periodName ? ` - ${periodName}` : ""}`}
-                                        >
-                                          <Chip
-                                            label={`${periodName ? `${periodName}: ` : ""}${subject}`}
-                                            size="small"
-                                          />
-                                        </Tooltip>
-                                      ));
-                                    })
-                                  ) : (
-                                    <Typography variant="body2" color="text.secondary">
-                                      Not assigned
-                                    </Typography>
-                                  )}
-                                </Box>
+                                <FormControl
+                                  size="small"
+                                  sx={{ minWidth: 260, maxWidth: 340 }}
+                                  disabled={!values.classes.length || savingAssignmentsId === mentor._id}
+                                >
+                                  <InputLabel id={`mentor-subjects-${mentor._id}`}>Subjects</InputLabel>
+                                  <Select
+                                    labelId={`mentor-subjects-${mentor._id}`}
+                                    multiple
+                                    value={values.subjects}
+                                    label="Subjects"
+                                    onChange={(event) =>
+                                      updateAssignmentDraft(mentor, "subjects", event.target.value)
+                                    }
+                                    renderValue={(selected) =>
+                                      selected.length ? `${selected.length} selected` : "Select subjects"
+                                    }
+                                  >
+                                    {subjectOptions.map((option) => (
+                                      <MenuItem key={option.key} value={option.key}>
+                                        <Checkbox checked={values.subjects.includes(option.key)} />
+                                        {option.label}
+                                      </MenuItem>
+                                    ))}
+                                  </Select>
+                                </FormControl>
                               </TableCell>
                               <TableCell>
                                 <Chip
@@ -349,6 +529,16 @@ export default function ManageMentors() {
                               </TableCell>
                               <TableCell align="right">
                                 <Box className="flex gap-1 justify-end">
+                                  {hasChanges && (
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      disabled={savingAssignmentsId === mentor._id}
+                                      onClick={() => saveMentorAssignments(mentor)}
+                                    >
+                                      {savingAssignmentsId === mentor._id ? "Saving..." : "Save"}
+                                    </Button>
+                                  )}
                                   <Tooltip title="Edit assigned branches">
                                     <IconButton
                                       size="small"
@@ -388,7 +578,8 @@ export default function ManageMentors() {
                                 </Box>
                               </TableCell>
                             </TableRow>
-                          ))}
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </TableContainer>

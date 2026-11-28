@@ -391,6 +391,157 @@ router.patch(
   }
 );
 
+router.patch(
+  "/:id/assignments",
+  verifyToken,
+  requireRole("admin"),
+  async (req, res) => {
+    try {
+      if (!Array.isArray(req.body.assignments)) {
+        return res.status(400).json({ message: "assignments must be an array" });
+      }
+
+      const mentor = await Mentor.findById(req.params.id);
+      if (!mentor) return res.status(404).json({ message: "Mentor not found" });
+
+      const normalizedAssignments = [];
+      const assignmentKeys = new Set();
+      const programCache = new Map();
+      for (const assignment of req.body.assignments) {
+        const { courseId, branch: branchName, period, subjects } = assignment || {};
+        const hasPeriod = period !== undefined && period !== null && period !== "";
+        const normalizedPeriod = hasPeriod ? Number(period) : null;
+        if (
+          !mongoose.isValidObjectId(courseId) ||
+          typeof branchName !== "string" ||
+          !branchName.trim() ||
+          (hasPeriod && (!Number.isInteger(normalizedPeriod) || normalizedPeriod < 1)) ||
+          !Array.isArray(subjects) ||
+          subjects.some((subject) => typeof subject !== "string")
+        ) {
+          return res.status(400).json({ message: "Each assignment needs a valid course, branch, period, and subjects list" });
+        }
+
+        let program = programCache.get(String(courseId));
+        if (!program) {
+          program = await AcademicProgram.findById(courseId);
+          if (!program) return res.status(400).json({ message: "An assigned course does not exist" });
+          programCache.set(String(courseId), program);
+        }
+        if (hasPeriod && normalizedPeriod > program.periodCount) {
+          return res.status(400).json({ message: `Period is outside ${program.name}'s configured duration` });
+        }
+        const branch = program.branches.find(
+          (item) => item.name.toLowerCase() === branchName.trim().toLowerCase()
+        );
+        if (!branch) {
+          return res.status(400).json({ message: `Branch ${branchName} is not configured for ${program.name}` });
+        }
+
+        const key = `${program._id}::${branch.name.toLowerCase()}::${hasPeriod ? normalizedPeriod : "all"}`;
+        if (assignmentKeys.has(key)) {
+          return res.status(400).json({ message: "Duplicate course, branch, and period assignments are not allowed" });
+        }
+        assignmentKeys.add(key);
+
+        const selectedSubjects = [
+          ...new Map(
+            subjects
+              .map((subject) => subject.trim())
+              .filter(Boolean)
+              .map((subject) => [subject.toLowerCase(), subject])
+          ).values(),
+        ];
+        const canonicalSubjects = selectedSubjects.map((subject) =>
+          branch.subjects.find((available) => available.toLowerCase() === subject.toLowerCase())
+        );
+        if (canonicalSubjects.some((subject) => !subject)) {
+          return res.status(400).json({ message: `An assigned subject is not configured for ${branch.name}` });
+        }
+
+        normalizedAssignments.push({
+          courseId: program._id,
+          branch: branch.name,
+          ...(hasPeriod ? { period: normalizedPeriod } : {}),
+          subjects: canonicalSubjects,
+        });
+      }
+
+      const previousAssignments = mentor.subjectAssignments.map((assignment) => ({
+        courseId: String(assignment.courseId),
+        branch: assignment.branch,
+      }));
+      mentor.subjectAssignments = normalizedAssignments;
+      await mentor.save();
+
+      const affectedGroups = new Map();
+      for (const assignment of [...previousAssignments, ...normalizedAssignments]) {
+        const courseId = String(assignment.courseId);
+        const program = programCache.get(courseId) || await AcademicProgram.findById(courseId);
+        if (!program) continue;
+        const branch = assignment.branch;
+        affectedGroups.set(`${courseId}::${branch.toLowerCase()}`, { program, branch });
+      }
+
+      let updatedStudentCount = 0;
+      for (const { program, branch } of affectedGroups.values()) {
+        const students = await Student.find({
+          courseApplied: exactTextPattern(program.name),
+          branchSpecialization: exactTextPattern(branch),
+        });
+        const periodField = program.studyMode === "semester" ? "semester" : "academicYear";
+        const studentsByPeriod = new Map();
+        for (const student of students) {
+          const period = student[periodField] ?? null;
+          const groupKey = period == null ? "" : String(period);
+          if (!studentsByPeriod.has(groupKey)) studentsByPeriod.set(groupKey, []);
+          studentsByPeriod.get(groupKey).push(student);
+        }
+
+        for (const [periodKey, group] of studentsByPeriod) {
+          const period = periodKey === "" ? null : Number(periodKey);
+          const candidates = await findMentorsForStudentGroup(program.name, branch, period);
+          const assignedMentor = selectMentorForStudentGroup(
+            program.name,
+            branch,
+            candidates,
+            period
+          );
+          const selectedAssignment = assignedMentor?.subjectAssignments?.find(
+            (assignment) =>
+              String(assignment.courseId) === String(program._id) &&
+              assignment.branch.toLowerCase() === branch.toLowerCase() &&
+              Number(assignment.period) === Number(period)
+          ) || assignedMentor?.subjectAssignments?.find(
+            (assignment) =>
+              String(assignment.courseId) === String(program._id) &&
+              assignment.branch.toLowerCase() === branch.toLowerCase() &&
+              assignment.period == null
+          );
+          const result = await Student.updateMany(
+            { _id: { $in: group.map((student) => student._id) } },
+            {
+              $set: {
+                assignedMentorId: assignedMentor?._id ?? null,
+                assignedSubjects: selectedAssignment?.subjects || [],
+              },
+            }
+          );
+          updatedStudentCount += result.modifiedCount;
+        }
+      }
+
+      const updatedMentor = await Mentor.findById(mentor._id)
+        .populate("assignedClasses")
+        .populate("subjectAssignments.courseId", "name branches studyMode periodCount");
+      res.json({ mentor: updatedMentor, updatedStudentCount });
+    } catch (error) {
+      console.error("Error updating mentor assignments:", error);
+      res.status(500).json({ message: "Failed to update mentor assignments" });
+    }
+  }
+);
+
 // Delete mentor
 router.delete("/:id", async (req, res) => {
   try {

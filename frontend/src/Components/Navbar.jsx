@@ -1,12 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import {
   AppBar,
   Toolbar,
   Box,
   Typography,
-  TextField,
 } from "@mui/material";
 
 const NAV_LINKS = [
@@ -21,7 +20,6 @@ const GRADIENT = "linear-gradient(to right, #4f46e5, #9333ea, #ec4899)";
 const Navbar = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
 
   const linkStyle = ({ isActive }) => ({
     color: "#fff",

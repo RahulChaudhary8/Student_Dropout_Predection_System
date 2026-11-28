@@ -10,9 +10,6 @@ import Attendances from "../../../Components/Attendances/Attendances";
 import CounsellingDashboard from "../Counsellings/CounsellingDashboard";
 import Counsellor from "../Counsellings/Counsellor";
 import Notification from "../Notification/Notification";
-import SelectScore from "../Grades/SelectScore";
-import SemesterScore from "../Grades/SemesterScore";
-import ClassScore from "../Grades/ClassScore";
 import ResultManagement from "../Grades/ResultManagement";
 import PromotionManagement from "../Grades/PromotionManagement";
 
@@ -251,7 +248,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [counsellingList, setCounsellingList] = useState([]);
   const [counsellingListLoaded, setCounsellingListLoaded] = useState(false);
-  const [fileName, setFileName] = useState("");
 
   useEffect(() => {
     const savedStudents = localStorage.getItem("students");
@@ -402,7 +398,6 @@ const Dashboard = () => {
   const handleFile = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setFileName(file.name);
 
     const fileExt = file.name.split(".").pop();
     if (!["xlsx", "xls"].includes(fileExt)) {
@@ -1246,10 +1241,7 @@ const Dashboard = () => {
           {activeTab === "test-scores" && (
             <Fade in timeout={400}>
               <Box>
-                <SelectScore
-                  onSelectClass={() => setActiveTab("class-score")}
-                  onSelectSemester={() => setActiveTab("semester-score")}
-                />
+                <ResultManagement />
               </Box>
             </Fade>
           )}
@@ -1270,21 +1262,6 @@ const Dashboard = () => {
             </Fade>
           )}
 
-          {activeTab === "class-score" && (
-            <Fade in timeout={400}>
-              <Box>
-                <ClassScore students={students} goBack={() => setActiveTab("test-scores")} />
-              </Box>
-            </Fade>
-          )}
-
-          {activeTab === "semester-score" && (
-            <Fade in timeout={400}>
-              <Box>
-                <SemesterScore students={students} goBack={() => setActiveTab("test-scores")} />
-              </Box>
-            </Fade>
-          )}
 
           {activeTab === "students" && (
             <Fade in timeout={400}>

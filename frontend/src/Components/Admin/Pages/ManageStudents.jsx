@@ -41,6 +41,7 @@ import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
 import InboxRoundedIcon from "@mui/icons-material/InboxRounded";
 import UpdateRoundedIcon from "@mui/icons-material/UpdateRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
+import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 
 const STUDENT_COLUMN_ALIASES = {
   fullName: ["fullname", "name"],
@@ -158,6 +159,7 @@ export default function ManageStudents({ isActiveTab }) {
   const [studentDraft, setStudentDraft] = useState({});
   const [studentSaving, setStudentSaving] = useState(false);
   const [inlineSavingId, setInlineSavingId] = useState("");
+  const [inlineStudentDrafts, setInlineStudentDrafts] = useState({});
   const [academicPrograms, setAcademicPrograms] = useState([]);
   const [academicCatalogError, setAcademicCatalogError] = useState("");
   const [mentorLoadError, setMentorLoadError] = useState("");
@@ -547,26 +549,77 @@ export default function ManageStudents({ isActiveTab }) {
     }
   };
 
-  const saveInlineStudentField = async (student, field, value) => {
+  const getInlineStudentValues = (student) => ({
+    courseApplied: student.courseApplied || "",
+    branchSpecialization: student.branchSpecialization || "",
+    academicYear: student.academicYear == null ? "" : String(student.academicYear),
+    semester: student.semester == null ? "" : String(student.semester),
+    assignedMentorId: String(student.assignedMentorId?._id || student.assignedMentorId || "__NONE__"),
+  });
+
+  const updateInlineStudentDraft = (student, field, value) => {
+    setInlineStudentDrafts((current) => {
+      const currentValues = current[student._id] || getInlineStudentValues(student);
+      if (field !== "courseApplied") {
+        return { ...current, [student._id]: { ...currentValues, [field]: value } };
+      }
+
+      const program = academicPrograms.find(
+        (item) => item.name.toLowerCase() === String(value || "").trim().toLowerCase()
+      );
+      return {
+        ...current,
+        [student._id]: {
+          ...currentValues,
+          courseApplied: value,
+          branchSpecialization: "",
+          academicYear: program?.studyMode === "semester" ? "" : program ? "1" : "",
+          semester: program?.studyMode === "semester" ? "1" : "",
+          assignedMentorId: "__NONE__",
+        },
+      };
+    });
+  };
+
+  const saveInlineStudentChanges = async (student) => {
+    const draft = inlineStudentDrafts[student._id];
+    if (!draft) return;
+    const program = academicPrograms.find(
+      (item) => item.name.toLowerCase() === String(draft.courseApplied || "").trim().toLowerCase()
+    );
+    if (!String(draft.courseApplied || "").trim()) {
+      alert("Please select a course before saving.");
+      return;
+    }
+    if (program) {
+      const period = program.studyMode === "semester" ? draft.semester : draft.academicYear;
+      if (!period) {
+        alert(`Please select the student's ${program.studyMode === "semester" ? "semester" : "academic year"}.`);
+        return;
+      }
+    }
+
     setInlineSavingId(student._id);
     try {
-      const updates = { [field]: value };
-      if (field === "courseApplied") {
-        const program = academicPrograms.find(
-          (item) => item.name.toLowerCase() === String(value || "").trim().toLowerCase()
-        );
-        updates.branchSpecialization = "";
-        updates.assignedMentorId = "__NONE__";
-        updates.academicYear = null;
-        updates.semester = null;
-        if (program?.studyMode === "semester") updates.semester = 1;
-        else if (program) updates.academicYear = 1;
+      const updates = {
+        courseApplied: draft.courseApplied,
+        branchSpecialization: draft.branchSpecialization,
+        academicYear: draft.academicYear || null,
+        semester: draft.semester || null,
+      };
+      if (draft.assignedMentorId !== getInlineStudentValues(student).assignedMentorId) {
+        updates.assignedMentorId = draft.assignedMentorId;
       }
       await axios.put(`http://localhost:5000/api/students/${student._id}`, updates);
+      setInlineStudentDrafts((current) => {
+        const next = { ...current };
+        delete next[student._id];
+        return next;
+      });
       await fetchStudents();
     } catch (err) {
-      console.error(`Could not update ${field}:`, err);
-      alert(`❌ ${err.response?.data?.error || "Could not update student field"}`);
+      console.error("Could not save student changes:", err);
+      alert(`❌ ${err.response?.data?.error || "Could not save student changes"}`);
     } finally {
       setInlineSavingId("");
     }
@@ -924,23 +977,28 @@ export default function ManageStudents({ isActiveTab }) {
                         </TableHead>
                         <TableBody>
                           {filteredStudents.map((student) => {
+                            const inlineValues =
+                              inlineStudentDrafts[student._id] || getInlineStudentValues(student);
                             const inlineProgram = academicPrograms.find(
                               (item) =>
                                 item.name.toLowerCase() ===
-                                String(student.courseApplied || "").trim().toLowerCase()
+                                String(inlineValues.courseApplied || "").trim().toLowerCase()
                             );
                             const inlineIsSemester = inlineProgram?.studyMode === "semester";
                             const inlinePeriodCount = inlineProgram?.periodCount || (inlineIsSemester ? 8 : 4);
-                            const inlinePeriod = inlineIsSemester ? student.semester : student.academicYear;
+                            const inlinePeriod = inlineIsSemester
+                              ? inlineValues.semester
+                              : inlineValues.academicYear;
                             const inlineMentors = getMentorsForStudentGroup(
                               mentors,
-                              student.courseApplied,
-                              student.branchSpecialization,
+                              inlineValues.courseApplied,
+                              inlineValues.branchSpecialization,
                               academicPrograms,
                               inlinePeriod
                             );
-                            const inlineMentorId = String(
-                              student.assignedMentorId?._id || student.assignedMentorId || ""
+                            const inlineInitialValues = getInlineStudentValues(student);
+                            const inlineIsDirty = Object.keys(inlineInitialValues).some(
+                              (field) => inlineValues[field] !== inlineInitialValues[field]
                             );
                             return (
                             <TableRow
@@ -958,9 +1016,9 @@ export default function ManageStudents({ isActiveTab }) {
                               <TableCell>{student.studentId}</TableCell>
                               <TableCell>{student.fullName}</TableCell>
                               <TableCell>
-                                <TextField select size="small" value={student.courseApplied || ""}
+                                <TextField select size="small" value={inlineValues.courseApplied}
                                   disabled={inlineSavingId === student._id}
-                                  onChange={(event) => saveInlineStudentField(student, "courseApplied", event.target.value)}
+                                  onChange={(event) => updateInlineStudentDraft(student, "courseApplied", event.target.value)}
                                   SelectProps={{ native: true }} sx={{ minWidth: 120 }}>
                                   <option value="">Select course</option>
                                   {academicPrograms.map((program) => (
@@ -969,9 +1027,9 @@ export default function ManageStudents({ isActiveTab }) {
                                 </TextField>
                               </TableCell>
                               <TableCell>
-                                <TextField select size="small" value={student.branchSpecialization || ""}
+                                <TextField select size="small" value={inlineValues.branchSpecialization}
                                   disabled={!inlineProgram || inlineSavingId === student._id}
-                                  onChange={(event) => saveInlineStudentField(student, "branchSpecialization", event.target.value)}
+                                  onChange={(event) => updateInlineStudentDraft(student, "branchSpecialization", event.target.value)}
                                   SelectProps={{ native: true }} sx={{ minWidth: 130 }}>
                                   <option value="">Select branch</option>
                                   {inlineProgram?.branches.map((branch) => (
@@ -980,9 +1038,9 @@ export default function ManageStudents({ isActiveTab }) {
                                 </TextField>
                               </TableCell>
                               <TableCell>
-                                <TextField select size="small" value={inlinePeriod ? String(inlinePeriod) : ""}
+                                <TextField select size="small" value={inlinePeriod}
                                   disabled={!inlineProgram || inlineSavingId === student._id}
-                                  onChange={(event) => saveInlineStudentField(
+                                  onChange={(event) => updateInlineStudentDraft(
                                     student,
                                     inlineIsSemester ? "semester" : "academicYear",
                                     event.target.value
@@ -1000,9 +1058,9 @@ export default function ManageStudents({ isActiveTab }) {
                               <TableCell>{student.email}</TableCell>
                               <TableCell>{student.plainPassword}</TableCell>
                               <TableCell>
-                                <TextField select size="small" value={inlineMentorId || "__NONE__"}
+                                <TextField select size="small" value={inlineValues.assignedMentorId}
                                   disabled={inlineSavingId === student._id}
-                                  onChange={(event) => saveInlineStudentField(student, "assignedMentorId", event.target.value)}
+                                  onChange={(event) => updateInlineStudentDraft(student, "assignedMentorId", event.target.value)}
                                   SelectProps={{ native: true }} sx={{ minWidth: 180 }}>
                                   <option value="__NONE__">Not Assigned</option>
                                   {inlineMentors.map((mentor) => (
@@ -1014,6 +1072,17 @@ export default function ManageStudents({ isActiveTab }) {
                               </TableCell>
                               <TableCell align="right">
                                 <Box className="flex gap-1 justify-end">
+                                  {inlineIsDirty && (
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      startIcon={<SaveRoundedIcon />}
+                                      disabled={inlineSavingId === student._id}
+                                      onClick={() => saveInlineStudentChanges(student)}
+                                    >
+                                      {inlineSavingId === student._id ? "Saving" : "Save"}
+                                    </Button>
+                                  )}
                                   <Tooltip title="Edit">
                                     <IconButton
                                       size="small"

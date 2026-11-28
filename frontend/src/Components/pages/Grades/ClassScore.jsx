@@ -52,9 +52,15 @@ const ClassScore = ({ students = [], goBack }) => {
   };
 
   const handleMarksChange = (idx, value) => {
-    if (value === "" || /^[0-9]*\.?[0-9]*$/.test(value)) {
+    if (value === "" || /^\d*\.?\d*$/.test(value)) {
       const updated = [...scoreData];
-      updated[idx].marks = value;
+      const maxScore = Number(testDetails.maxScore);
+      const score = Number(value);
+      if (value !== "" && Number.isFinite(maxScore) && maxScore > 0 && score > maxScore) {
+        updated[idx].marks = String(maxScore);
+      } else {
+        updated[idx].marks = value;
+      }
       setScoreData(updated);
     }
   };
@@ -64,6 +70,39 @@ const ClassScore = ({ students = [], goBack }) => {
       alert("⚠️ Please select the test first!");
       return;
     }
+    const maxScore = Number(testDetails.maxScore);
+    if (!Number.isFinite(maxScore) || maxScore <= 0) {
+      alert("⚠️ Maximum score must be greater than zero.");
+      return;
+    }
+    if (scoreData.length === 0) {
+      alert("⚠️ No student records are available.");
+      return;
+    }
+    const missing = scoreData.find((student) => student.marks === "");
+    if (missing) {
+      alert(`⚠️ Enter marks for ${missing.fullName || missing.studentId || "the student"}.`);
+      return;
+    }
+    const invalid = scoreData.find(
+      (student) => Number(student.marks) < 0 || Number(student.marks) > maxScore
+    );
+    if (invalid) {
+      alert(`⚠️ Marks for ${invalid.fullName || invalid.studentId || "the student"} must be between 0 and ${maxScore}.`);
+      return;
+    }
+    const records = JSON.parse(localStorage.getItem("classTestScores") || "[]");
+    records.push({
+      testDetails: { ...testDetails, maxScore },
+      scores: scoreData.map((student) => ({
+        studentId: student.studentId,
+        fullName: student.fullName,
+        course: student.course,
+        marks: Number(student.marks),
+      })),
+      savedAt: new Date().toISOString(),
+    });
+    localStorage.setItem("classTestScores", JSON.stringify(records));
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -76,6 +115,11 @@ const ClassScore = ({ students = [], goBack }) => {
       !testDetails.maxScore
     ) {
       alert("⚠️ Fill all test details before selecting!");
+      return;
+    }
+    const maxScore = Number(testDetails.maxScore);
+    if (!Number.isFinite(maxScore) || maxScore <= 0) {
+      alert("⚠️ Maximum score must be greater than zero.");
       return;
     }
     setIsTestSelected((prev) => !prev);

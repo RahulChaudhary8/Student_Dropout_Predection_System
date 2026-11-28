@@ -1,9 +1,9 @@
 // src/context/AuthContext.jsx
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom"; // add this
+import { AuthContext } from "./AuthContextStore";
 
-const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(null); // JWT or server token
@@ -11,6 +11,14 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL;
+
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setToken(null);
+    setUser(null);
+    navigate("/home");
+  }, [navigate]);
 
   // on mount, check localStorage for existing token
   useEffect(() => {
@@ -50,7 +58,7 @@ export function AuthProvider({ children }) {
     };
 
     initAuth();
-  }, [API_URL]);
+  }, [API_URL, logout]);
 
   // login helper: store token and user in state + localStorage
   const login = ({ token: newToken, user: newUser }) => {
@@ -62,13 +70,6 @@ export function AuthProvider({ children }) {
   };
 
   // logout helper: clear storage + state
-  const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    setToken(null);
-    setUser(null);
-    navigate("/home");
-  };
 
   const value = {
     token,
@@ -82,6 +83,3 @@ export function AuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
-  return useContext(AuthContext);
-}

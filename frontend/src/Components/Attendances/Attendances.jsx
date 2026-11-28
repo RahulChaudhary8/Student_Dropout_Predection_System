@@ -34,7 +34,7 @@ function statusTone(status) {
   return "default";
 }
 
-const Attendances = ({ studentData = [], courses = [] }) => {
+const Attendances = ({ studentData = [] }) => {
   // Build the subject/course dropdown from whatever data is actually on
   // the students (fullName/courseApplied is the DB shape; name/course is
   // the Excel-upload shape — same fallback pattern used elsewhere in the
